@@ -1,0 +1,76 @@
+#CareLabs - .ignore
+# ── OS files ────────────────────────────────
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── IDE & Editor ────────────────────────────
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+*.suo
+*.user
+*.sln.docstates
+nbproject/
+.project
+.classpath
+.settings/
+.factorypath
+.springBeans
+.sts4-cache
+
+# ── Java / Maven ────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+
+# ── Node / Frontend ─────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.npm/
+
+# ── Next.js ─────────────────────────────────
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+
+# ── Environment / Secrets ───────────────────
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Backend service application.yml (sensitive)
+**/src/main/resources/application.yml
+!**/src/main/resources/application-example.yml
+
+# ── Build outputs ───────────────────────────
+dist/
+build/
+out/
+
+# ── Logs ────────────────────────────────────
+*.log
+logs/
+
+# ── Docker ──────────────────────────────────
+.dockerignore
+
+# ── Misc ────────────────────────────────────
+*.tmp
+*.temp
+*.swp
+*.bak
+*.orig

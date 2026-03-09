@@ -1,0 +1,36 @@
+# ============================================
+# Payment Service - Example Configuration
+# ============================================
+# Copy this file to application.yml and update values as needed.
+
+server:
+  port: 8087
+
+spring:
+  application:
+    name: payment-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/carelabs_payments
+    username: your_db_username
+    password: your_db_password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# Payment Gateway Configuration (PayHere / Stripe)
+# payhere:
+#   merchant-id: your_merchant_id
+#   merchant-secret: your_merchant_secret
+#   sandbox: true
+#   notify-url: http://localhost:8087/payments/notify
+
+# stripe:
+#   secret-key: sk_test_your_stripe_secret_key
+#   publishable-key: pk_test_your_stripe_publishable_key

@@ -1,0 +1,23 @@
+# ============================================
+# Notification Service - Example Configuration
+# ============================================
+# Copy this file to application.yml and update values as needed.
+
+server:
+  port: 8086
+
+spring:
+  application:
+    name: notification-service
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your_email@gmail.com
+    password: your_app_password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
