@@ -1,0 +1,15 @@
+package com.carelabs.notificationservice.enums;
+
+public enum NotificationEvent {
+    APPOINTMENT_BOOKED,
+    APPOINTMENT_REMINDER,
+    APPOINTMENT_CANCELLED,
+    PAYMENT_SUCCESS,
+    PAYMENT_FAILED,
+    DOC_APPROVED,
+    DOC_REJECTED,
+    PRESCRIPTION_ISSUED,
+    REFUND_REQUESTED,
+    REFUND_PROCESSED,
+    PAYOUT_PROCESSED
+}
