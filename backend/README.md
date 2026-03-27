@@ -122,97 +122,103 @@
 
 ---
 
-##  API Endpoints
+## API Endpoints
 
 All requests go through the **API Gateway** at `http://localhost:8080`.
 
-###  Auth Service (`/auth`)
+### Auth Service (/auth)
 
-| Method | Endpoint              | Description                      | Role     |
-|--------|-----------------------|----------------------------------|----------|
-| POST   | `/auth/register`      | Register a new user              | Public   |
-| POST   | `/auth/login`         | Login and receive JWT token      | Public   |
-| POST   | `/auth/refresh`       | Refresh expired JWT token        | Any      |
-| GET    | `/auth/me`            | Get current user profile         | Any      |
-| PUT    | `/auth/change-password` | Change password                | Any      |
-| GET    | `/auth/admin/users`   | List all users                   | Admin    |
-| PUT    | `/auth/admin/users/{id}/role` | Update user role           | Admin    |
-| DELETE | `/auth/admin/users/{id}` | Delete a user account         | Admin    |
-| PUT    | `/auth/admin/doctors/{id}/verify` | Verify doctor registration | Admin |
+| Method | Endpoint | Description | Role |
+|:---|:---|:---|:---|
+| POST | `/auth/register` | Register a new user | Public |
+| POST | `/auth/login` | Login and receive JWT | Public |
+| POST | `/auth/refresh` | Refresh expired JWT | Any |
+| GET | `/auth/me` | Get current user profile | Any |
+| PUT | `/auth/change-password` | Change password | Any |
+| GET | `/auth/admin/users` | List all users | Admin |
+| PUT | `/auth/admin/users/{id}/role` | Update user role | Admin |
+| DELETE | `/auth/admin/users/{id}` | Delete user account | Admin |
 
-###  Patient Service (`/patients`)
+### Doctor Service (/doctors)
 
-| Method | Endpoint                          | Description                        | Role    |
-|--------|-----------------------------------|------------------------------------|---------|
-| GET    | `/patients/profile`               | Get patient profile                | Patient |
-| PUT    | `/patients/profile`               | Update patient profile             | Patient |
-| POST   | `/patients/reports/upload`        | Upload medical report/document     | Patient |
-| GET    | `/patients/reports`               | List all uploaded reports           | Patient |
-| GET    | `/patients/reports/{id}`          | Download specific report           | Patient |
-| DELETE | `/patients/reports/{id}`          | Delete a report                    | Patient |
-| GET    | `/patients/medical-history`       | View medical history               | Patient |
-| GET    | `/patients/prescriptions`         | View past prescriptions            | Patient |
-| GET    | `/patients/prescriptions/{id}`    | View specific prescription detail  | Patient |
+| Method | Endpoint | Description | Role |
+|:---|:---|:---|:---|
+| GET | `/doctors` | Browse all verified doctors | Public |
+| GET | `/doctors/{id}` | Get public doctor details | Public |
+| GET | `/doctors?specialty={specialty}` | Search doctors by specialty | Public |
+| GET | `/doctors/me` | Get own doctor profile | Doctor |
+| PUT | `/doctors/me` | Update doctor profile | Doctor |
+| POST | `/doctors/documents` | Upload verification docs (Multipart) | Doctor |
+| GET | `/doctors/documents` | View own documents | Doctor |
+| DELETE | `/doctors/documents/{id}` | Delete document | Doctor |
+| PUT | `/doctors/{id}/verify` | Verify doctor registration | Admin |
+| POST | `/doctors/availability` | Set weekly availability template | Doctor |
+| PUT | `/doctors/availability/{id}` | Update availability template | Doctor |
+| DELETE | `/doctors/availability/{id}` | Remove availability template | Doctor |
+| POST | `/doctors/leave` | Add a specific day off | Doctor |
 
-###  Doctor Service (`/doctors`)
+### Patient Service (/patients)
 
-| Method | Endpoint                              | Description                        | Role    |
-|--------|---------------------------------------|------------------------------------|---------|
-| GET    | `/doctors`                            | Browse all verified doctors        | Public  |
-| GET    | `/doctors/{id}`                       | Get doctor details                 | Public  |
-| GET    | `/doctors/specialty/{specialty}`      | Search doctors by specialty        | Public  |
-| GET    | `/doctors/profile`                    | Get own doctor profile             | Doctor  |
-| PUT    | `/doctors/profile`                    | Update doctor profile              | Doctor  |
-| POST   | `/doctors/availability`              | Set availability schedule          | Doctor  |
-| PUT    | `/doctors/availability/{id}`         | Update availability slot           | Doctor  |
-| DELETE | `/doctors/availability/{id}`         | Remove availability slot           | Doctor  |
-| GET    | `/doctors/availability/{doctorId}`   | Get doctor's available slots       | Public  |
-| POST   | `/doctors/prescriptions`             | Issue a digital prescription       | Doctor  |
-| GET    | `/doctors/patients/{patientId}/reports` | View patient-uploaded reports   | Doctor  |
+| Method | Endpoint | Description | Role |
+|:---|:---|:---|:---|
+| GET | `/patients/me` | Get own profile | Patient |
+| PUT | `/patients/me` | Update profile | Patient |
+| POST | `/patients/reports` | Upload medical report (Multipart) | Patient |
+| GET | `/patients/reports` | List uploaded reports | Patient |
+| GET | `/patients/reports/{id}` | Download specific report | Patient |
+| DELETE | `/patients/reports/{id}` | Delete a report | Patient |
+| GET | `/patients/medical-history` | View AI symptoms & history | Patient |
 
-###  Appointment Service (`/appointments`)
+### Appointment Service (/appointments)
 
-| Method | Endpoint                               | Description                          | Role    |
-|--------|----------------------------------------|--------------------------------------|---------|
-| POST   | `/appointments`                        | Book a new appointment               | Patient |
-| GET    | `/appointments`                        | List own appointments                | Patient/Doctor |
-| GET    | `/appointments/{id}`                   | Get appointment details              | Patient/Doctor |
-| PUT    | `/appointments/{id}`                   | Modify an appointment                | Patient |
-| DELETE | `/appointments/{id}`                   | Cancel an appointment                | Patient |
-| PUT    | `/appointments/{id}/status`            | Update appointment status            | Doctor  |
-| PUT    | `/appointments/{id}/accept`            | Accept appointment request           | Doctor  |
-| PUT    | `/appointments/{id}/reject`            | Reject appointment request           | Doctor  |
-| GET    | `/appointments/{id}/meeting-link`      | Get telemedicine meeting link        | Patient/Doctor |
-| GET    | `/appointments/search?specialty=X&date=Y` | Search available appointments     | Patient |
+*Handles Bookings, Clinical Data, and Chat*
 
-###  Notification Service (`/notifications`)
+| Method | Endpoint | Description | Role |
+|:---|:---|:---|:---|
+| POST | `/appointments` | Book a new appointment | Patient |
+| GET | `/appointments` | List appointments (Contextual by JWT) | User |
+| GET | `/appointments/{id}` | Get appointment details | User |
+| PUT | `/appointments/{id}` | Reschedule appointment | Patient |
+| DELETE | `/appointments/{id}` | Cancel appointment | Patient |
+| PUT | `/appointments/{id}/status` | Update status (e.g., ACCEPTED) | Doctor |
+| GET | `/appointments/available-slots` | Get open slots for a date & doctor | Public |
+| GET | `/appointments/{id}/meeting-link` | Get Jitsi video URL | User |
+| POST | `/appointments/{id}/review` | Submit post-consultation review | Patient |
+| POST | `/appointments/{id}/notes` | Doctor saves clinical notes | Doctor |
+| GET | `/appointments/{id}/notes` | Patient/Doctor views notes | User |
+| POST | `/appointments/{id}/prescriptions` | Doctor issues prescription | Doctor |
+| GET | `/appointments/prescriptions/{id}` | View specific prescription | User |
+| GET | `/appointments/{id}/chat` | Get chat history for session | User |
+| POST | `/appointments/{id}/chat` | Send message in session | User |
 
-| Method | Endpoint                              | Description                         | Role     |
-|--------|---------------------------------------|-------------------------------------|----------|
-| POST   | `/notifications/email`               | Send email notification             | Internal |
-| POST   | `/notifications/sms`                 | Send SMS notification               | Internal |
-| GET    | `/notifications`                     | Get user's notification history     | Any      |
-| PUT    | `/notifications/{id}/read`           | Mark a notification as read         | Any      |
-| POST   | `/notifications/appointment-confirm` | Send appointment confirmation       | Internal |
-| POST   | `/notifications/consultation-complete` | Send consultation complete notice | Internal |
+### Payment Service (/payments)
 
-###  Payment Service (`/payments`)
+| Method | Endpoint | Description | Role |
+|:---|:---|:---|:---|
+| POST | `/payments/initiate` | Start PayHere/Stripe checkout | Patient |
+| GET | `/payments/{id}` | Get payment details | Patient |
+| GET | `/payments/appointment/{id}` | Get payment by appointment ID | Patient |
+| GET | `/payments/history` | Get user's payment history | Patient |
+| POST | `/payments/notify` | Webhook for gateway callback | External |
+| GET | `/payments/verify/{orderId}` | Frontend polling check | Patient |
+| POST | `/payments/refund/{id}` | Process a refund | Admin |
+| GET | `/payments/admin/transactions` | List platform transactions | Admin |
 
-| Method | Endpoint                              | Description                         | Role     |
-|--------|---------------------------------------|-------------------------------------|----------|
-| POST   | `/payments/initiate`                 | Initiate a payment for consultation | Patient  |
-| GET    | `/payments/{id}`                     | Get payment details                 | Patient  |
-| GET    | `/payments/history`                  | Get payment history                 | Patient  |
-| POST   | `/payments/notify`                   | Payment gateway webhook/callback    | External |
-| GET    | `/payments/verify/{orderId}`         | Verify payment status               | Patient  |
-| POST   | `/payments/refund/{id}`              | Process a refund                    | Admin    |
-| GET    | `/payments/admin/transactions`       | List all transactions               | Admin    |
+### Notification Service (/notifications)
 
-###  AI Symptom Checker Service (`/ai`)
+| Method | Endpoint | Description | Role |
+|:---|:---|:---|:---|
+| POST | `/notifications` | Internal trigger (Email/SMS) | Internal |
+| GET | `/notifications` | Get user's notification history | Any |
+| PUT | `/notifications/{id}/read` | Mark as read | Any |
 
-| Method | Endpoint                              | Description                         | Role     |
-|--------|---------------------------------------|-------------------------------------|----------|
-| POST   | `/ai/check-symptoms`                  | Analyze symptoms and suggest doctor | Patient  |
+### AI Symptom Checker Service (/ai)
+
+| Method | Endpoint | Description | Role |
+|:---|:---|:---|:---|
+| POST | `/ai/symptom-check` | Submit symptoms & get prediction | Patient |
+
+
 
 ---
 
