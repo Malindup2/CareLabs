@@ -7,6 +7,9 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
 
+
+import org.hibernate.annotations.CreationTimestamp;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -33,6 +36,11 @@ public class User {
     private Role role;
 
     @Builder.Default
-    @Column(nullable = false)
-    private boolean isVerified = false;
+    private Boolean enabled = true;
+
+    private LocalDateTime lastLoginAt;
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
 }
