@@ -1,7 +1,9 @@
 package com.carelabs.authservice.controller;
 
 import com.carelabs.authservice.dto.AuthResponse;
+import com.carelabs.authservice.dto.ChangePasswordRequest;
 import com.carelabs.authservice.dto.LoginRequest;
+import com.carelabs.authservice.dto.RefreshTokenRequest;
 import com.carelabs.authservice.dto.RegisterRequest;
 import com.carelabs.authservice.dto.UserDto;
 import com.carelabs.authservice.service.AuthService;
@@ -31,10 +33,23 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(authService.refreshToken(request));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<UserDto> getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String email = authentication.getName();
         return ResponseEntity.ok(authService.getCurrentUserInfo(email));
+    }
+
+    @PutMapping("/change-password")
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = authentication.getName();
+        authService.changePassword(email, request);
+        return ResponseEntity.noContent().build();
     }
 }

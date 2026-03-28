@@ -1,7 +1,9 @@
 package com.carelabs.authservice.service;
 
 import com.carelabs.authservice.dto.AuthResponse;
+import com.carelabs.authservice.dto.ChangePasswordRequest;
 import com.carelabs.authservice.dto.LoginRequest;
+import com.carelabs.authservice.dto.RefreshTokenRequest;
 import com.carelabs.authservice.dto.RegisterRequest;
 import com.carelabs.authservice.dto.UserDto;
 import com.carelabs.authservice.model.User;
@@ -16,6 +18,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 
 @Service
 public class AuthService {
@@ -47,7 +51,6 @@ public class AuthService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
-                .isVerified(false)
                 .build();
 
         userRepository.save(user);
@@ -75,12 +78,56 @@ public class AuthService {
                 .map(authority -> authority.getAuthority().replace("ROLE_", ""))
                 .orElse("PATIENT");
 
+                User user = userRepository.findByEmail(userDetails.getUsername())
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                user.setLastLoginAt(LocalDateTime.now());
+                userRepository.save(user);
+
         return AuthResponse.builder()
                 .token(token)
                 .email(userDetails.getUsername())
                 .role(role)
                 .build();
     }
+
+        public AuthResponse refreshToken(RefreshTokenRequest request) {
+                String email;
+                try {
+                        email = jwtUtil.extractUsernameAllowExpired(request.getToken());
+                } catch (Exception ex) {
+                        throw new ResourceConflictException("Invalid refresh token");
+                }
+
+                User user = userRepository.findByEmail(email)
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+                if (Boolean.FALSE.equals(user.getEnabled())) {
+                        throw new ResourceConflictException("User account is disabled");
+                }
+
+                String token = jwtUtil.generateToken(email);
+                return AuthResponse.builder()
+                                .token(token)
+                                .email(user.getEmail())
+                                .role(user.getRole().name())
+                                .build();
+        }
+
+        public void changePassword(String email, ChangePasswordRequest request) {
+                User user = userRepository.findByEmail(email)
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+                if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                        throw new ResourceConflictException("Current password is incorrect");
+                }
+
+                if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+                        throw new ResourceConflictException("New password must be different from current password");
+                }
+
+                user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+                userRepository.save(user);
+        }
 
     public UserDto getCurrentUserInfo(String email) {
         User user = userRepository.findByEmail(email)
@@ -90,7 +137,9 @@ public class AuthService {
                 .id(user.getId())
                 .email(user.getEmail())
                 .role(user.getRole())
-                .isVerified(user.isVerified())
+                .enabled(user.getEnabled())
+                .lastLoginAt(user.getLastLoginAt())
+                .createdAt(user.getCreatedAt())
                 .build();
     }
 }

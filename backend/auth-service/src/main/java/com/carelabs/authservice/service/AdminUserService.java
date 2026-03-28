@@ -46,7 +46,7 @@ public class AdminUserService {
             throw new ResourceConflictException("Only doctors can be verified in this endpoint");
         }
         
-        user.setVerified(true);
+        user.setEnabled(true);
         return convertToDto(userRepository.save(user));
     }
 
@@ -55,7 +55,9 @@ public class AdminUserService {
                 .id(user.getId())
                 .email(user.getEmail())
                 .role(user.getRole())
-                .isVerified(user.isVerified())
+            .enabled(user.getEnabled())
+            .lastLoginAt(user.getLastLoginAt())
+            .createdAt(user.getCreatedAt())
                 .build();
     }
 }
