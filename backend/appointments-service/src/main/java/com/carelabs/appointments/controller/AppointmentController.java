@@ -95,4 +95,37 @@ public class AppointmentController {
     public ResponseEntity<List<com.carelabs.appointments.entity.ChatMessage>> getChatHistory(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.getChatHistory(id));
     }
+
+    //Save a Consultation Note
+    @PostMapping("/{id}/notes")
+    public ResponseEntity<com.carelabs.appointments.entity.ConsultationNote> saveNote(
+            @PathVariable UUID id, @RequestBody com.carelabs.appointments.entity.ConsultationNote note) {
+        return ResponseEntity.ok(appointmentService.saveNote(id, note));
+    }
+
+    //Get a Consultation Note
+    @GetMapping("/{id}/notes")
+    public ResponseEntity<com.carelabs.appointments.entity.ConsultationNote> getNote(@PathVariable UUID id) {
+        return ResponseEntity.ok(appointmentService.getNote(id));
+    }
+
+    //Save a Prescription
+    @PostMapping("/{id}/prescriptions")
+    public ResponseEntity<com.carelabs.appointments.entity.Prescription> savePrescription(
+            @PathVariable UUID id, @RequestBody com.carelabs.appointments.entity.Prescription prescription) {
+        return ResponseEntity.ok(appointmentService.savePrescription(id, prescription));
+    }
+
+    //Get a Prescription
+    @GetMapping("/{id}/prescriptions")
+    public ResponseEntity<com.carelabs.appointments.entity.Prescription> getPrescription(@PathVariable UUID id) {
+        return ResponseEntity.ok(appointmentService.getPrescription(id));
+    }
+
+    //Save a Review
+    @PostMapping("/{id}/reviews")
+    public ResponseEntity<com.carelabs.appointments.entity.Review> saveReview(
+            @PathVariable UUID id, @RequestBody com.carelabs.appointments.entity.Review review) {
+        return ResponseEntity.ok(appointmentService.saveReview(id, review));
+    }
 }
