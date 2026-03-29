@@ -160,4 +160,32 @@ public class PaymentService {
             throw new RuntimeException(e.getMessage());
         }
     }
+
+    public java.util.List<Payment> getAllPayments() {
+        return paymentRepository.findAll();
+    }
+
+    public Payment getPaymentById(UUID id) {
+        return paymentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Payment not found"));
+    }
+
+    public Payment getPaymentByAppointmentId(UUID appointmentId) {
+        return paymentRepository.findByAppointmentId(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Payment not found for appointment"));
+    }
+
+    public java.util.List<Payment> getPaymentHistory() {
+        return paymentRepository.findAll(); 
+    }
+
+    public Payment verifyPayment(UUID orderId) {
+        return getPaymentById(orderId);
+    }
+
+    public Payment refundPayment(UUID id) {
+        Payment payment = getPaymentById(id);
+        payment.setStatus(PaymentStatus.FAILED); 
+        return paymentRepository.save(payment);
+    }
 }
