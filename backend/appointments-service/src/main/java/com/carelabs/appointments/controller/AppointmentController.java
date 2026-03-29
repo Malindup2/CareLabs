@@ -117,15 +117,20 @@ public class AppointmentController {
     }
 
     //Get a Prescription
-    @GetMapping("/{id}/prescriptions")
+    @GetMapping("/prescriptions/{id}")
     public ResponseEntity<com.carelabs.appointments.entity.Prescription> getPrescription(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.getPrescription(id));
     }
 
     //Save a Review
-    @PostMapping("/{id}/reviews")
+    @PostMapping("/{id}/review")
     public ResponseEntity<com.carelabs.appointments.entity.Review> saveReview(
             @PathVariable UUID id, @RequestBody com.carelabs.appointments.entity.Review review) {
         return ResponseEntity.ok(appointmentService.saveReview(id, review));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Appointment>> getAllAppointments() {
+        return ResponseEntity.ok(appointmentService.getAllAppointments());
     }
 }
