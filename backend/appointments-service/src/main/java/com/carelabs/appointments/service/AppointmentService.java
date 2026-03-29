@@ -7,7 +7,14 @@ import com.carelabs.appointments.entity.ChatMessage;
 import com.carelabs.appointments.enums.AppointmentStatus;
 import com.carelabs.appointments.repository.AppointmentRepository;
 import com.carelabs.appointments.repository.ChatMessageRepository;
+import com.carelabs.appointments.repository.ConsultationNoteRepository;
+import com.carelabs.appointments.repository.PrescriptionRepository;
+import com.carelabs.appointments.repository.ReviewRepository;
 import org.springframework.stereotype.Service;
+
+import com.carelabs.appointments.entity.ConsultationNote;
+import com.carelabs.appointments.entity.Prescription;
+import com.carelabs.appointments.entity.Review;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -18,10 +25,20 @@ public class AppointmentService {
 
     private final AppointmentRepository appointmentRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final ConsultationNoteRepository consultationNoteRepository;
+    private final PrescriptionRepository prescriptionRepository;
+    private final ReviewRepository reviewRepository;
 
-    public AppointmentService(AppointmentRepository appointmentRepository, ChatMessageRepository chatMessageRepository) {
+    public AppointmentService(AppointmentRepository appointmentRepository, 
+                              ChatMessageRepository chatMessageRepository,
+                              ConsultationNoteRepository consultationNoteRepository,
+                              PrescriptionRepository prescriptionRepository,
+                              ReviewRepository reviewRepository) {
         this.appointmentRepository = appointmentRepository;
         this.chatMessageRepository = chatMessageRepository;
+        this.consultationNoteRepository = consultationNoteRepository;
+        this.prescriptionRepository = prescriptionRepository;
+        this.reviewRepository = reviewRepository;
     }
 
     public Appointment bookAppointment(AppointmentRequest request) {
@@ -127,8 +144,43 @@ public class AppointmentService {
         return chatMessageRepository.save(chatMessage);
     }
 
-    //Get Chat History
+    // Get Chat History
     public List<ChatMessage> getChatHistory(UUID appointmentId) {
         return chatMessageRepository.findByAppointmentIdOrderBySentAtAsc(appointmentId);
+    }
+
+    public ConsultationNote saveNote(UUID appointmentId, ConsultationNote note) {
+        getAppointmentById(appointmentId); // Verify
+        return consultationNoteRepository.save(note); 
+    }
+
+    public ConsultationNote getNote(UUID appointmentId) {
+        return consultationNoteRepository.findByAppointmentId(appointmentId)
+                .orElseThrow(() -> new RuntimeException("No notes found for this appointment"));
+    }
+
+    public Prescription savePrescription(UUID appointmentId, Prescription prescription) {
+        getAppointmentById(appointmentId); 
+        prescription.setAppointmentId(appointmentId);
+        // Link the items to the parent prescription before saving
+        if (prescription.getItems() != null) {
+            prescription.getItems().forEach(item -> item.setPrescription(prescription));
+        }
+        return prescriptionRepository.save(prescription); 
+    }
+
+    public Prescription getPrescription(UUID appointmentId) {
+        return prescriptionRepository.findByAppointmentId(appointmentId)
+                .orElseThrow(() -> new RuntimeException("No prescription found for this appointment"));
+    }
+
+    public Review saveReview(UUID appointmentId, Review review) {
+        getAppointmentById(appointmentId);
+        review.setAppointmentId(appointmentId);
+        return reviewRepository.save(review); 
+    }
+
+    public List<Appointment> getAllAppointments() {
+        return appointmentRepository.findAll();
     }
 }
