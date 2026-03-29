@@ -74,4 +74,25 @@ public class AppointmentController {
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date) {
         return ResponseEntity.ok(appointmentService.getAvailableSlots(doctorId, date));
     }
+
+    //Get the Video Meeting Link
+    @GetMapping("/{id}/meeting-link")
+    public ResponseEntity<java.util.Map<String, String>> getMeetingLink(@PathVariable UUID id) {
+        String link = appointmentService.getMeetingLink(id);
+        return ResponseEntity.ok(java.util.Map.of("meetingUrl", link));
+    }
+
+    //Send a Chat Message
+    @PostMapping("/{id}/chat")
+    public ResponseEntity<com.carelabs.appointments.entity.ChatMessage> sendChatMessage(
+            @PathVariable UUID id, 
+            @RequestBody com.carelabs.appointments.dto.ChatMessageRequest request) {
+        return ResponseEntity.ok(appointmentService.saveChatMessage(id, request));
+    }
+
+    //Get Chat History
+    @GetMapping("/{id}/chat")
+    public ResponseEntity<List<com.carelabs.appointments.entity.ChatMessage>> getChatHistory(@PathVariable UUID id) {
+        return ResponseEntity.ok(appointmentService.getChatHistory(id));
+    }
 }

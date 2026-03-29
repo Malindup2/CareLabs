@@ -1,9 +1,12 @@
 package com.carelabs.appointments.service;
 
 import com.carelabs.appointments.dto.AppointmentRequest;
+import com.carelabs.appointments.dto.ChatMessageRequest;
 import com.carelabs.appointments.entity.Appointment;
+import com.carelabs.appointments.entity.ChatMessage;
 import com.carelabs.appointments.enums.AppointmentStatus;
 import com.carelabs.appointments.repository.AppointmentRepository;
+import com.carelabs.appointments.repository.ChatMessageRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -14,9 +17,11 @@ import java.util.UUID;
 public class AppointmentService {
 
     private final AppointmentRepository appointmentRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
-    public AppointmentService(AppointmentRepository appointmentRepository) {
+    public AppointmentService(AppointmentRepository appointmentRepository, ChatMessageRepository chatMessageRepository) {
         this.appointmentRepository = appointmentRepository;
+        this.chatMessageRepository = chatMessageRepository;
     }
 
     public Appointment bookAppointment(AppointmentRequest request) {
@@ -91,9 +96,39 @@ public class AppointmentService {
         );
     }
 
-    // Helper stub for availability check
+    //Helper stub for availability check
     private boolean checkDoctorAvailabilityStub(UUID doctorId, java.time.LocalDateTime time) {
        
         return true;
+    }
+
+    
+    public String getMeetingLink(UUID appointmentId) {
+        Appointment appointment = getAppointmentById(appointmentId);
+        
+        if (appointment.getType() != com.carelabs.appointments.enums.AppointmentType.TELEMEDICINE) {
+            throw new RuntimeException("This is an in-clinic appointment. No video link available.");
+        }
+        
+        return "https://meet.jit.si/CareLabs-Consultation-" + appointmentId.toString();
+    }
+
+    //Save a new chat message
+    public ChatMessage saveChatMessage(UUID appointmentId, ChatMessageRequest request) {
+        
+        getAppointmentById(appointmentId); 
+
+        ChatMessage chatMessage = new ChatMessage();
+        chatMessage.setAppointmentId(appointmentId);
+        chatMessage.setSenderId(request.getSenderId());
+        chatMessage.setMessage(request.getMessage());
+        chatMessage.setSentAt(java.time.LocalDateTime.now());
+
+        return chatMessageRepository.save(chatMessage);
+    }
+
+    //Get Chat History
+    public List<ChatMessage> getChatHistory(UUID appointmentId) {
+        return chatMessageRepository.findByAppointmentIdOrderBySentAtAsc(appointmentId);
     }
 }
