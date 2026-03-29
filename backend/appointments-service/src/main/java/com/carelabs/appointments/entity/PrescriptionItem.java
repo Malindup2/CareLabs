@@ -27,8 +27,10 @@ public class PrescriptionItem {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
-    private UUID prescriptionId;
+    @jakarta.persistence.ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @jakarta.persistence.JoinColumn(name = "prescription_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Prescription prescription;
 
     @Column(nullable = false)
     private String medicineName;

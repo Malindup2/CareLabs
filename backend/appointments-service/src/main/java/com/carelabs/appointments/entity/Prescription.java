@@ -38,4 +38,7 @@ public class Prescription {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @jakarta.persistence.OneToMany(mappedBy = "prescription", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<PrescriptionItem> items;
 }

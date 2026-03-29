@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appointments-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appointments-service
+  template:
+    metadata:
+      labels:
+        app: appointments-service
+    spec:
+      containers:
+      - name: appointments-service
+        image: <your-dockerhub-username>/carelabs-appointments-service:latest
+        ports:
+        - containerPort: 8084
+        envFrom:
+        - configMapRef:
+            name: shared-config
+        - secretRef:
+            name: shared-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appointments-service
+spec:
+  selector:
+    app: appointments-service
+  ports:
+    - protocol: TCP
+      port: 8084
+      targetPort: 8084

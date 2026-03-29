@@ -45,4 +45,34 @@ public class PaymentController {
             return ResponseEntity.badRequest().body("Webhook processing failed.");
         }
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<com.carelabs.paymentservice.entity.Payment> getPaymentById(@PathVariable java.util.UUID id) {
+        return ResponseEntity.ok(paymentService.getPaymentById(id));
+    }
+
+    @GetMapping("/appointment/{id}")
+    public ResponseEntity<com.carelabs.paymentservice.entity.Payment> getPaymentByAppointmentId(@PathVariable java.util.UUID id) {
+        return ResponseEntity.ok(paymentService.getPaymentByAppointmentId(id));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<java.util.List<com.carelabs.paymentservice.entity.Payment>> getPaymentHistory() {
+        return ResponseEntity.ok(paymentService.getPaymentHistory());
+    }
+
+    @GetMapping("/verify/{orderId}")
+    public ResponseEntity<com.carelabs.paymentservice.entity.Payment> verifyPayment(@PathVariable java.util.UUID orderId) {
+        return ResponseEntity.ok(paymentService.verifyPayment(orderId));
+    }
+
+    @PostMapping("/refund/{id}")
+    public ResponseEntity<com.carelabs.paymentservice.entity.Payment> refundPayment(@PathVariable java.util.UUID id) {
+        return ResponseEntity.ok(paymentService.refundPayment(id));
+    }
+
+    @GetMapping("/admin/transactions")
+    public ResponseEntity<java.util.List<com.carelabs.paymentservice.entity.Payment>> getAllTransactions() {
+        return ResponseEntity.ok(paymentService.getAllPayments());
+    }
 }
