@@ -179,4 +179,8 @@ public class AppointmentService {
         review.setAppointmentId(appointmentId);
         return reviewRepository.save(review); 
     }
+
+    public List<Appointment> getAllAppointments() {
+        return appointmentRepository.findAll();
+    }
 }

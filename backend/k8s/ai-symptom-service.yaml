@@ -16,7 +16,7 @@ spec:
       - name: ai-symptom-service
         image: <your-dockerhub-username>/carelabs-ai-symptom-service:latest
         ports:
-        - containerPort: 8087
+        - containerPort: 8088
         envFrom:
         - configMapRef:
             name: shared-config
@@ -32,5 +32,5 @@ spec:
     app: ai-symptom-service
   ports:
     - protocol: TCP
-      port: 8087
-      targetPort: 8087
+      port: 8088
+      targetPort: 8088
