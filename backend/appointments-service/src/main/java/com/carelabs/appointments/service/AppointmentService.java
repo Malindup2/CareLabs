@@ -20,7 +20,7 @@ public class AppointmentService {
     }
 
     public Appointment bookAppointment(AppointmentRequest request) {
-        // Create the new appointment entity
+        // Create the new appointment
         Appointment appointment = new Appointment();
         appointment.setPatientId(request.getPatientId());
         appointment.setDoctorId(request.getDoctorId());
@@ -33,7 +33,7 @@ public class AppointmentService {
         appointment.setDurationMinutes(30);
         appointment.setConsultationFee(new BigDecimal("1500.00")); //Hardcoded here for test
 
-        // Save to the PostgreSQL database
+        // Save to the database
         return appointmentRepository.save(appointment);
     }
 
@@ -54,5 +54,46 @@ public class AppointmentService {
         Appointment appointment = getAppointmentById(id);
         appointment.setStatus(newStatus);
         return appointmentRepository.save(appointment);
+    }
+
+    //Cancel an appointment
+    public void deleteAppointment(UUID id) {
+        if (!appointmentRepository.existsById(id)) {
+            throw new RuntimeException("Appointment not found with ID: " + id);
+        }
+        appointmentRepository.deleteById(id);
+    }
+
+    //Reschedule an appointment
+    public Appointment rescheduleAppointment(UUID id, java.time.LocalDateTime newTime) {
+        Appointment appointment = getAppointmentById(id);
+        
+        // Check if the new time is available (STUBB)
+        boolean isDoctorAvailable = checkDoctorAvailabilityStub(appointment.getDoctorId(), newTime);
+        if (!isDoctorAvailable) {
+            throw new RuntimeException("Doctor is not available at the new time.");
+        }
+
+        appointment.setAppointmentTime(newTime);
+        return appointmentRepository.save(appointment);
+    }
+
+    //Get available slots (STUBBED)
+    public List<java.time.LocalTime> getAvailableSlots(UUID doctorId, java.time.LocalDate date) {
+        //will return dummy available slots(just untill doc service)
+        
+        return List.of(
+                java.time.LocalTime.of(9, 0),
+                java.time.LocalTime.of(9, 30),
+                java.time.LocalTime.of(10, 0),
+                java.time.LocalTime.of(14, 0),
+                java.time.LocalTime.of(14, 30)
+        );
+    }
+
+    // Helper stub for availability check
+    private boolean checkDoctorAvailabilityStub(UUID doctorId, java.time.LocalDateTime time) {
+       
+        return true;
     }
 }

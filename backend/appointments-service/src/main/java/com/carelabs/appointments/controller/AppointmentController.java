@@ -51,4 +51,27 @@ public class AppointmentController {
             @RequestParam AppointmentStatus status) {
         return ResponseEntity.ok(appointmentService.updateAppointmentStatus(id, status));
     }
+
+    //Cancel an appointment
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteAppointment(@PathVariable UUID id) {
+        appointmentService.deleteAppointment(id);
+        return ResponseEntity.noContent().build(); // Returns a 204 No Content success status
+    }
+
+    //Reschedule an appointment
+    @PutMapping("/{id}")
+    public ResponseEntity<Appointment> rescheduleAppointment(
+            @PathVariable UUID id, 
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime newTime) {
+        return ResponseEntity.ok(appointmentService.rescheduleAppointment(id, newTime));
+    }
+
+    //Get available slots for a doctor on a specific date
+    @GetMapping("/available-slots")
+    public ResponseEntity<List<java.time.LocalTime>> getAvailableSlots(
+            @RequestParam UUID doctorId, 
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date) {
+        return ResponseEntity.ok(appointmentService.getAvailableSlots(doctorId, date));
+    }
 }
