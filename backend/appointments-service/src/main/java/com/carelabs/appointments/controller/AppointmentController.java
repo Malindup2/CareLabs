@@ -51,4 +51,48 @@ public class AppointmentController {
             @RequestParam AppointmentStatus status) {
         return ResponseEntity.ok(appointmentService.updateAppointmentStatus(id, status));
     }
+
+    //Cancel an appointment
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteAppointment(@PathVariable UUID id) {
+        appointmentService.deleteAppointment(id);
+        return ResponseEntity.noContent().build(); // Returns a 204 No Content success status
+    }
+
+    //Reschedule an appointment
+    @PutMapping("/{id}")
+    public ResponseEntity<Appointment> rescheduleAppointment(
+            @PathVariable UUID id, 
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime newTime) {
+        return ResponseEntity.ok(appointmentService.rescheduleAppointment(id, newTime));
+    }
+
+    //Get available slots for a doctor on a specific date
+    @GetMapping("/available-slots")
+    public ResponseEntity<List<java.time.LocalTime>> getAvailableSlots(
+            @RequestParam UUID doctorId, 
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date) {
+        return ResponseEntity.ok(appointmentService.getAvailableSlots(doctorId, date));
+    }
+
+    //Get the Video Meeting Link
+    @GetMapping("/{id}/meeting-link")
+    public ResponseEntity<java.util.Map<String, String>> getMeetingLink(@PathVariable UUID id) {
+        String link = appointmentService.getMeetingLink(id);
+        return ResponseEntity.ok(java.util.Map.of("meetingUrl", link));
+    }
+
+    //Send a Chat Message
+    @PostMapping("/{id}/chat")
+    public ResponseEntity<com.carelabs.appointments.entity.ChatMessage> sendChatMessage(
+            @PathVariable UUID id, 
+            @RequestBody com.carelabs.appointments.dto.ChatMessageRequest request) {
+        return ResponseEntity.ok(appointmentService.saveChatMessage(id, request));
+    }
+
+    //Get Chat History
+    @GetMapping("/{id}/chat")
+    public ResponseEntity<List<com.carelabs.appointments.entity.ChatMessage>> getChatHistory(@PathVariable UUID id) {
+        return ResponseEntity.ok(appointmentService.getChatHistory(id));
+    }
 }

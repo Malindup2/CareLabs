@@ -1,0 +1,10 @@
+package com.carelabs.appointments.dto;
+
+import lombok.Data;
+import java.util.UUID;
+
+@Data
+public class ChatMessageRequest {
+    private UUID senderId; //Patient ID or the Doctor ID
+    private String message;
+}

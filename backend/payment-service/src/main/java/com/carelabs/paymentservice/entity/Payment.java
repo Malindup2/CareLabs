@@ -1,20 +1,13 @@
 package com.carelabs.paymentservice.entity;
 
 import com.carelabs.paymentservice.enums.PaymentStatus;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "payments")
@@ -22,6 +15,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Payment {
 
     @Id
@@ -35,19 +29,26 @@ public class Payment {
     private BigDecimal amount;
 
     @Column(nullable = false)
-    private BigDecimal platformFee;
+    private BigDecimal platformFee; 
 
     @Column(nullable = false)
-    private BigDecimal doctorEarning;
+    private BigDecimal doctorEarning; 
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PaymentStatus status;
 
     @Column(nullable = false)
-    private String provider;
+    private String provider = "PAYHERE";
 
     private String paymentMethod;
-    private String transactionId;
+    
+    private String transactionId; 
+
+    @Builder.Default
     private String currency = "LKR";
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
 }
