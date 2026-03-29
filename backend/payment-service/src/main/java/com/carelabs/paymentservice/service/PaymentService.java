@@ -49,6 +49,7 @@ public class PaymentService {
                 .doctorEarning(doctorEarning)
                 .status(PaymentStatus.PENDING)
                 .currency(currency)
+                .provider("PAYHERE")
                 .build();
         
         payment = paymentRepository.save(payment);
@@ -79,7 +80,7 @@ public class PaymentService {
                 .build();
     }
 
-    // PayHere's required MD5 Hash Formula: 
+    // PayHere's MD5 Hash Formula: 
     // md5(merchant_id + order_id + amount + currency + md5(merchant_secret))
     private String generatePayHereHash(String merchantId, String orderId, String amount, String currency, String merchantSecret) {
         try {
@@ -106,6 +107,57 @@ public class PaymentService {
             
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate PayHere hash", e);
+        }
+    }
+
+    public void handlePayHereWebhook(
+            String merchantId, String orderId, String paymentId, String payhereAmount, 
+            String payhereCurrency, int statusCode, String md5sig, String method) {
+        
+        try {
+            
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(this.merchantSecret.getBytes());
+            byte[] digestSecret = md.digest();
+            StringBuilder sbSecret = new StringBuilder();
+            for (byte b : digestSecret) {
+                sbSecret.append(String.format("%02x", b).toUpperCase());
+            }
+
+            
+            String hashString = this.merchantId + orderId + payhereAmount + payhereCurrency + statusCode + sbSecret.toString();
+            md.update(hashString.getBytes());
+            byte[] digestFinal = md.digest();
+            StringBuilder sbFinal = new StringBuilder();
+            for (byte b : digestFinal) {
+                sbFinal.append(String.format("%02x", b).toUpperCase());
+            }
+            String localMd5sig = sbFinal.toString();
+
+            if (!localMd5sig.equalsIgnoreCase(md5sig)) {
+                //added print hash for debugging
+                System.out.println("EXPECTED HASH");
+                System.out.println(localMd5sig);
+                
+                throw new RuntimeException("Signature Failed! Expected: " + localMd5sig + " but got: " + md5sig);
+            }
+
+            
+            Payment payment = paymentRepository.findById(UUID.fromString(orderId))
+                    .orElseThrow(() -> new RuntimeException("Payment Order ID not found: " + orderId));
+
+            if (statusCode == 2) {
+                payment.setStatus(PaymentStatus.SUCCESS);
+                payment.setTransactionId(paymentId);
+                payment.setPaymentMethod(method);
+            } else if (statusCode < 0) {
+                payment.setStatus(PaymentStatus.FAILED);
+            }
+
+            paymentRepository.save(payment);
+            
+        } catch (Exception e) {
+            throw new RuntimeException(e.getMessage());
         }
     }
 }
