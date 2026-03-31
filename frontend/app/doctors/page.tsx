@@ -1,0 +1,255 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { Search, MapPin, Star, Filter, Calendar, ChevronDown, CheckCircle } from "lucide-react";
+import PublicNavbar from "@/components/PublicNavbar";
+import PublicFooter from "@/components/PublicFooter";
+import { MOCK_DOCTORS, SPECIALTIES, IDoctorProfile } from "@/lib/mock-data";
+
+export default function DoctorsDirectory() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSpecialty, setSelectedSpecialty] = useState("All Specialties");
+  const [selectedAvailability, setSelectedAvailability] = useState("Any Time");
+  
+  // Basic filtering based on mock data
+  const filteredDoctors = MOCK_DOCTORS.filter((doc) => {
+    const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          doc.hospital.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSpecialty = selectedSpecialty === "All Specialties" || doc.specialty === selectedSpecialty;
+    // Availability is mostly illustrative for the UI filter in this mock
+    const matchesAvailability = selectedAvailability === "Any Time" || 
+                                doc.availability.some(d => d.dayName === selectedAvailability && d.slots.some(s => s.isAvailable));
+    
+    return matchesSearch && matchesSpecialty && matchesAvailability;
+  });
+
+  return (
+    <div className="min-h-screen bg-slate-50/50 selection:bg-primary/20 selection:text-primary flex flex-col">
+      <PublicNavbar />
+
+      <main className="flex-1 pt-20">
+        
+        {/* --- HERO / SEARCH SECTION --- */}
+        <section className="bg-white border-b border-slate-200/60 pt-16 pb-20 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none"></div>
+          
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div className="max-w-3xl mx-auto text-center">
+              <h1 className="text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
+                Find the right specialist
+              </h1>
+              <p className="text-lg text-slate-500 mb-10 font-medium">
+                Book appointments with verified healthcare professionals across Sri Lanka.
+              </p>
+
+              {/* Main Search Bar */}
+              <div className="bg-white p-2 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 flex flex-col sm:flex-row gap-2 max-w-2xl mx-auto">
+                <div className="flex-1 flex items-center px-4 bg-slate-50/50 rounded-xl border border-transparent focus-within:border-blue-500/30 focus-within:bg-white transition-colors">
+                  <Search className="w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search doctors, hospitals, or conditions..."
+                    className="w-full bg-transparent border-none focus:outline-none focus:ring-0 px-3 py-3.5 text-slate-700 placeholder:text-slate-400 font-medium"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold transition-all whitespace-nowrap shadow-md">
+                  Search
+                </button>
+              </div>
+
+              {/* Quick Pills */}
+              <div className="mt-8 flex flex-wrap justify-center gap-2">
+                <span className="text-sm text-slate-400 font-medium mr-2 self-center">Popular:</span>
+                {["Cardiology", "Dermatology", "Pediatrics"].map((spec) => (
+                  <button 
+                    key={spec}
+                    onClick={() => setSelectedSpecialty(spec)}
+                    className="px-4 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 text-sm font-semibold transition-colors border border-blue-100/50"
+                  >
+                    {spec}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* --- MAIN LAYOUT (FILTERS + GRID) --- */}
+        <section className="py-12 lg:py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-10">
+            
+            {/* Filters Sidebar */}
+            <aside className="w-full lg:w-64 shrink-0">
+              <div className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm sticky top-28">
+                <div className="flex items-center gap-2 mb-6 text-slate-900">
+                  <Filter className="w-5 h-5" />
+                  <h3 className="font-bold text-lg">Filters</h3>
+                </div>
+
+                {/* Specialty Filter */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">Specialty</h4>
+                  <div className="space-y-2">
+                    {SPECIALTIES.map((spec) => (
+                      <label key={spec} className="flex items-center gap-3 cursor-pointer group">
+                        <input 
+                          type="radio" 
+                          name="specialty" 
+                          checked={selectedSpecialty === spec}
+                          onChange={() => setSelectedSpecialty(spec)}
+                          className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-600 cursor-pointer" 
+                        />
+                        <span className={`text-sm font-medium ${selectedSpecialty === spec ? 'text-slate-900' : 'text-slate-500 group-hover:text-slate-700'}`}>
+                          {spec}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Availability Filter */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">Availability</h4>
+                  <div className="space-y-2">
+                    {["Any Time", "Today", "Tomorrow"].map((day) => (
+                      <label key={day} className="flex items-center gap-3 cursor-pointer group">
+                        <input 
+                          type="radio" 
+                          name="availability" 
+                          checked={selectedAvailability === day}
+                          onChange={() => setSelectedAvailability(day)}
+                          className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-600 cursor-pointer" 
+                        />
+                        <span className={`text-sm font-medium ${selectedAvailability === day ? 'text-slate-900' : 'text-slate-500 group-hover:text-slate-700'}`}>
+                          {day}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Clear Filters */}
+                <button 
+                  onClick={() => {
+                    setSelectedSpecialty("All Specialties");
+                    setSelectedAvailability("Any Time");
+                    setSearchTerm("");
+                  }}
+                  className="w-full py-2.5 mt-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            </aside>
+
+            {/* Results Grid */}
+            <div className="flex-1">
+              <div className="mb-6 flex justify-between items-end">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    {selectedSpecialty === "All Specialties" ? "Available Doctors" : selectedSpecialty}
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1">{filteredDoctors.length} results found</p>
+                </div>
+                
+                {/* Sort Dropdown Hook (Visual Only) */}
+                <button className="hidden sm:flex items-center gap-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors">
+                  Sort by: <span className="text-slate-900 font-bold">Recommended</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+
+              {filteredDoctors.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-12 text-center">
+                   <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-4">
+                     <Search className="w-8 h-8 text-slate-300" />
+                   </div>
+                   <h3 className="text-xl font-bold text-slate-900 mb-2">No doctors found</h3>
+                   <p className="text-slate-500">Try adjusting your filters or search terms.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {filteredDoctors.map((doc) => (
+                    <DoctorCard key={doc.id} doctor={doc} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </section>
+      </main>
+
+      <PublicFooter />
+    </div>
+  );
+}
+
+function DoctorCard({ doctor }: { doctor: IDoctorProfile }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:-translate-y-1 hover:border-blue-500/30 transition-all duration-300 flex flex-col h-full group">
+      
+      {/* Header Info */}
+      <div className="flex gap-4 items-start mb-5">
+        <div className="relative shrink-0">
+           <img 
+             src={doctor.imageUrl} 
+             alt={doctor.name} 
+             className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shadow-sm" 
+           />
+           {doctor.featured && (
+             <div className="absolute -top-2 -right-2 bg-amber-500 text-white p-1 rounded-full shadow-sm" title="Featured">
+               <Star className="w-3 h-3 fill-current" />
+             </div>
+           )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <Link href={`/doctors/${doctor.id}`} className="block">
+            <h3 className="text-[17px] font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+              {doctor.name}
+            </h3>
+          </Link>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100/50">
+              {doctor.specialty}
+            </span>
+            <span className="text-xs text-slate-500 flex items-center font-medium">
+              <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 mr-1" />
+              {doctor.rating} ({doctor.reviewCount})
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Hospital/Location */}
+      <div className="mb-6 space-y-2.5 flex-1">
+        <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+          <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+          <span className="truncate">{doctor.hospital}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+          <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+          <span className="truncate">Next available: <span className="text-emerald-600 font-bold">{doctor.availability[0]?.dayName || "Contact"}</span></span>
+        </div>
+      </div>
+
+      {/* Action Border */}
+      <div className="pt-4 border-t border-slate-100 mt-auto flex items-center justify-between">
+        <div className="text-sm">
+          <span className="text-slate-500 font-medium">Consultation Fee</span>
+          <p className="font-bold text-slate-900 mt-0.5">Rs. {doctor.consultationFee}</p>
+        </div>
+        <Link 
+          href={`/doctors/${doctor.id}`} 
+          className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm"
+        >
+          Book
+        </Link>
+      </div>
+
+    </div>
+  );
+}
