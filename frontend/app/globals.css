@@ -1,26 +1,48 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand color palette */
+  --color-primary: #2563EB;    /* blue-600 */
+  --color-secondary: #22C55E;  /* green-500 */
+  --color-ai: #7C3AED;         /* violet-600 */
+  
+  /* UI Layout */
+  --background: #F8FAFC;       /* slate-50 */
+  --foreground: #0F172A;       /* slate-900 */
+  --color-border: #E2E8F0;     /* slate-200 */
+
+  /* System states */
+  --color-warning: #F59E0B;    /* amber-400 */
+  --color-error: #EF4444;      /* red-500 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --color-ai: var(--color-ai);
+  --color-layout-border: var(--color-border);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* For now keeping dark mode disabled or identical since user specified exact hexes for the app */
+    --background: #0f172a; /* slate-900 */
+    --foreground: #f8fafc; /* slate-50 */
+    --color-border: #334155; /* slate-700 */
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
