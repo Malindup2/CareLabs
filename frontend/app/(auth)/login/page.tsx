@@ -89,11 +89,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
-           <ShieldCheck className="h-4 w-4 text-green-500" />
-           <span>Secure, HIPAA compliant login.</span>
-        </div>
-
         <button
           type="submit"
           disabled={loading}
