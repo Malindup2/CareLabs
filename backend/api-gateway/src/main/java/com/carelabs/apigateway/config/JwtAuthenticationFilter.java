@@ -59,8 +59,11 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             }
 
             String username = jwtUtil.extractUsername(token);
+            String userId = jwtUtil.extractUserId(token);
+            
             ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
                     .header("X-Auth-User", username)
+                    .header("X-Auth-User-Id", userId != null ? userId : "")
                     .header("X-Auth-Role", role)
                     .build();
 
