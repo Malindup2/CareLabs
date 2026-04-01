@@ -1,11 +1,20 @@
 package com.carelabs.patientservice.controller;
 
+import com.carelabs.patientservice.dto.CreatePatientAllergyRequest;
 import com.carelabs.patientservice.dto.MedicalHistoryResponse;
 import com.carelabs.patientservice.dto.MedicalReportResponse;
+import com.carelabs.patientservice.dto.PatientAllergyResponse;
 import com.carelabs.patientservice.dto.PatientProfileResponse;
+import com.carelabs.patientservice.dto.UpdatePatientAllergyRequest;
 import com.carelabs.patientservice.dto.UpdatePatientProfileRequest;
+import com.carelabs.patientservice.enums.ReportType;
+import com.carelabs.patientservice.service.CurrentUserService;
 import com.carelabs.patientservice.service.PatientService;
+import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,33 +24,94 @@ import java.util.UUID;
 public class PatientController {
 
     private final PatientService patientService;
+    private final CurrentUserService currentUserService;
 
-    public PatientController(PatientService patientService) {
+    public PatientController(PatientService patientService, CurrentUserService currentUserService) {
         this.patientService = patientService;
+        this.currentUserService = currentUserService;
     }
 
-    // TEMP: using hardcoded userId for now
-    private UUID getCurrentUserId() {
-        return UUID.fromString("11111111-1111-1111-1111-111111111111");
-    }
-
+    @PreAuthorize("hasRole('PATIENT')")
     @GetMapping("/me")
     public PatientProfileResponse getMyProfile() {
-        return patientService.getMyProfile(getCurrentUserId());
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.getMyProfile(userId);
     }
 
+    @PreAuthorize("hasRole('PATIENT')")
     @PutMapping("/me")
-    public PatientProfileResponse updateMyProfile(@RequestBody UpdatePatientProfileRequest request) {
-        return patientService.updateMyProfile(getCurrentUserId(), request);
+    public PatientProfileResponse updateMyProfile(@Valid @RequestBody UpdatePatientProfileRequest request) {
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.updateMyProfile(userId, request);
     }
 
+    @PreAuthorize("hasRole('PATIENT')")
+    @PostMapping(value = "/reports", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public MedicalReportResponse uploadReport(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("type") ReportType type,
+            @RequestParam(value = "appointmentId", required = false) UUID appointmentId
+    ) {
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.uploadReport(userId, file, type, appointmentId);
+    }
+
+    @PreAuthorize("hasRole('PATIENT')")
     @GetMapping("/reports")
     public List<MedicalReportResponse> getMyReports() {
-        return patientService.getMyReports(getCurrentUserId());
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.getMyReports(userId);
     }
 
+    @PreAuthorize("hasRole('PATIENT')")
+    @GetMapping("/reports/{id}")
+    public MedicalReportResponse getMyReportById(@PathVariable UUID id) {
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.getMyReportById(userId, id);
+    }
+
+    @PreAuthorize("hasRole('PATIENT')")
+    @DeleteMapping("/reports/{id}")
+    public void deleteMyReport(@PathVariable UUID id) {
+        UUID userId = currentUserService.getCurrentUserId();
+        patientService.deleteMyReport(userId, id);
+    }
+
+    @PreAuthorize("hasRole('PATIENT')")
+    @PostMapping("/allergies")
+    public PatientAllergyResponse createMyAllergy(@Valid @RequestBody CreatePatientAllergyRequest request) {
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.createMyAllergy(userId, request);
+    }
+
+    @PreAuthorize("hasRole('PATIENT')")
+    @GetMapping("/allergies")
+    public List<PatientAllergyResponse> getMyAllergies() {
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.getMyAllergies(userId);
+    }
+
+    @PreAuthorize("hasRole('PATIENT')")
+    @PutMapping("/allergies/{id}")
+    public PatientAllergyResponse updateMyAllergy(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdatePatientAllergyRequest request
+    ) {
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.updateMyAllergy(userId, id, request);
+    }
+
+    @PreAuthorize("hasRole('PATIENT')")
+    @DeleteMapping("/allergies/{id}")
+    public void deleteMyAllergy(@PathVariable UUID id) {
+        UUID userId = currentUserService.getCurrentUserId();
+        patientService.deleteMyAllergy(userId, id);
+    }
+
+    @PreAuthorize("hasRole('PATIENT')")
     @GetMapping("/medical-history")
     public MedicalHistoryResponse getMedicalHistory() {
-        return patientService.getMedicalHistory(getCurrentUserId());
+        UUID userId = currentUserService.getCurrentUserId();
+        return patientService.getMedicalHistory(userId);
     }
 }
