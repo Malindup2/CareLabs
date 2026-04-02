@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -16,7 +17,7 @@ import java.util.Map;
 @Service
 public class SymptomCheckService {
 
-    @Value("${llm.provider}")
+    @Value("${llm.provider:}")
     private String provider;
 
     @Value("${gemini.api.key:}")
@@ -35,21 +36,30 @@ public class SymptomCheckService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public SymptomCheckResponse analyzeSymptoms(String symptoms) {
-        SymptomAnalysisResult analysis;
+        try {
+            SymptomAnalysisResult analysis;
 
-        if ("gemini".equalsIgnoreCase(provider)) {
-            analysis = analyzeWithGemini(symptoms);
-        } else if ("openai".equalsIgnoreCase(provider)) {
-            analysis = analyzeWithOpenAi(symptoms);
-        } else {
-            throw new RuntimeException("Unsupported provider: " + provider);
+            if (symptoms == null || symptoms.isBlank()) {
+                return buildNonSymptomResponse();
+            }
+
+            if ("gemini".equalsIgnoreCase(provider)) {
+                analysis = analyzeWithGemini(symptoms);
+            } else if ("openai".equalsIgnoreCase(provider)) {
+                analysis = analyzeWithOpenAi(symptoms);
+            } else {
+                throw new RuntimeException("Unsupported provider: " + provider);
+            }
+
+            return SymptomCheckResponse.builder()
+                    .result(analysis.getResult())
+                    .confidenceScore(analysis.isSymptomQuery() ? analysis.getConfidenceScore() : null)
+                    .recommendedSpecialty(analysis.isSymptomQuery() ? analysis.getRecommendedSpecialty() : null)
+                    .build();
+
+        } catch (Exception e) {
+            return buildFallbackResponse();
         }
-
-        return SymptomCheckResponse.builder()
-                .result(analysis.getResult())
-                .confidenceScore(analysis.isSymptomQuery() ? analysis.getConfidenceScore() : null)
-                .recommendedSpecialty(analysis.isSymptomQuery() ? analysis.getRecommendedSpecialty() : null)
-                .build();
     }
 
     private SymptomAnalysisResult analyzeWithGemini(String symptoms) {
@@ -77,20 +87,25 @@ public class SymptomCheckService {
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url,
-                HttpMethod.POST,
-                entity,
-                new ParameterizedTypeReference<>() {}
-        );
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    new ParameterizedTypeReference<>() {}
+            );
 
-        Map<String, Object> responseBody = response.getBody();
-        if (responseBody == null) {
-            throw new RuntimeException("Empty response from Gemini");
+            Map<String, Object> responseBody = response.getBody();
+            if (responseBody == null) {
+                throw new RuntimeException("Empty response from Gemini");
+            }
+
+            String text = extractGeminiText(responseBody);
+            return parseModelJson(text);
+
+        } catch (RestClientException e) {
+            throw new RuntimeException("Gemini API request failed", e);
         }
-
-        String text = extractGeminiText(responseBody);
-        return parseModelJson(text);
     }
 
     private SymptomAnalysisResult analyzeWithOpenAi(String symptoms) {
@@ -115,20 +130,25 @@ public class SymptomCheckService {
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url,
-                HttpMethod.POST,
-                entity,
-                new ParameterizedTypeReference<>() {}
-        );
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    new ParameterizedTypeReference<>() {}
+            );
 
-        Map<String, Object> responseBody = response.getBody();
-        if (responseBody == null) {
-            throw new RuntimeException("Empty response from OpenAI");
+            Map<String, Object> responseBody = response.getBody();
+            if (responseBody == null) {
+                throw new RuntimeException("Empty response from OpenAI");
+            }
+
+            String text = extractOpenAiText(responseBody);
+            return parseModelJson(text);
+
+        } catch (RestClientException e) {
+            throw new RuntimeException("OpenAI API request failed", e);
         }
-
-        String text = extractOpenAiText(responseBody);
-        return parseModelJson(text);
     }
 
     private String buildPrompt(String symptoms) {
@@ -157,24 +177,24 @@ public class SymptomCheckService {
 
                 2. If the user's message IS a symptom description:
                    - symptomQuery must be true
-                   - confidenceScore must be a decimal number between 0 and 1
+                   - confidenceScore must be a decimal number between 0 and 1, or between 0 and 100
                    - recommendedSpecialty must contain a suitable doctor specialty
                    - result must be a natural user-facing sentence
                    - result MUST include:
                      a) a possible preliminary health suggestion
                      b) "This is only a preliminary AI suggestion and not a diagnosis."
-                     c) confidence MUST be shown ONLY as percentage (example: 85%, not 0.85)
+                     c) confidence shown as percentage, for example 85%
                      d) recommended specialty in natural text
                    - confidenceScore and recommendedSpecialty must ALSO be returned separately as their own JSON fields
 
                 3. recommendedSpecialty must be a short specialty name only, like:
-                   "General Physician", "Cardiologist", "Dermatologist", "Neurologist", "ENT Specialist", "Pediatrician"
+                   "General Physician", "Cardiologist", "Dermatologist", "Neurologist", "ENT Specialist",
+                   "Pediatrician", "Psychologist", "Psychiatrist", "Ophthalmologist", "Orthopedic Specialist"
 
                 4. JSON only.
 
                 User message:
-                %s
-                """.formatted(symptoms);
+                """ + symptoms;
     }
 
     @SuppressWarnings("unchecked")
@@ -198,7 +218,7 @@ public class SymptomCheckService {
             Map<String, Object> firstPart = parts.get(0);
             Object text = firstPart.get("text");
 
-            if (text == null) {
+            if (text == null || text.toString().isBlank()) {
                 throw new RuntimeException("Gemini text response is missing");
             }
 
@@ -222,7 +242,7 @@ public class SymptomCheckService {
                 List<Map<String, Object>> content = (List<Map<String, Object>>) firstOutput.get("content");
                 if (content != null && !content.isEmpty()) {
                     Object text = content.get(0).get("text");
-                    if (text != null) {
+                    if (text != null && !text.toString().isBlank()) {
                         return text.toString();
                     }
                 }
@@ -253,19 +273,19 @@ public class SymptomCheckService {
 
             Double confidence = parsed.getConfidenceScore();
             if (confidence == null) {
-                confidence = 0.70;
+                confidence = 70.0;
             }
 
-            if (confidence > 1) {
-                confidence = confidence / 100.0;
+            if (confidence <= 1) {
+                confidence = confidence * 100;
             }
 
             if (confidence < 0) {
                 confidence = 0.0;
             }
 
-            if (confidence > 1) {
-                confidence = 1.0;
+            if (confidence > 100) {
+                confidence = 100.0;
             }
 
             String specialty = parsed.getRecommendedSpecialty();
@@ -281,7 +301,7 @@ public class SymptomCheckService {
                     .build();
 
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to parse AI JSON response: " + json, e);
+            throw new RuntimeException("Failed to parse AI JSON response", e);
         }
     }
 
@@ -310,5 +330,21 @@ public class SymptomCheckService {
         }
 
         return cleaned.substring(firstBrace, lastBrace + 1);
+    }
+
+    private SymptomCheckResponse buildNonSymptomResponse() {
+        return SymptomCheckResponse.builder()
+                .result("I’m your digital symptom checker. If you describe your symptoms, I can give a preliminary health suggestion and recommend a doctor specialty.")
+                .confidenceScore(null)
+                .recommendedSpecialty(null)
+                .build();
+    }
+
+    private SymptomCheckResponse buildFallbackResponse() {
+        return SymptomCheckResponse.builder()
+                .result("Sorry, I couldn't analyze your symptoms at the moment. This is only a preliminary AI service and not a diagnosis. Please try again later or consult a General Physician.")
+                .confidenceScore(50.0)
+                .recommendedSpecialty("General Physician")
+                .build();
     }
 }
