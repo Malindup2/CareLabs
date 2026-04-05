@@ -56,7 +56,7 @@ public class AuthService {
         userRepository.save(user);
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        String token = jwtUtil.generateToken(userDetails, user.getRole().name());
+        String token = jwtUtil.generateToken(userDetails, user.getRole().name(), user.getId().toString());
 
         return AuthResponse.builder()
                 .token(token)
@@ -77,12 +77,12 @@ public class AuthService {
                 .map(authority -> authority.getAuthority().replace("ROLE_", ""))
                 .orElse("PATIENT");
 
-        String token = jwtUtil.generateToken(userDetails, role);
-
                 User user = userRepository.findByEmail(userDetails.getUsername())
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
                 user.setLastLoginAt(LocalDateTime.now());
                 userRepository.save(user);
+
+        String token = jwtUtil.generateToken(userDetails, role, user.getId().toString());
 
         return AuthResponse.builder()
                 .token(token)
@@ -106,7 +106,7 @@ public class AuthService {
                         throw new ResourceConflictException("User account is disabled");
                 }
 
-                String token = jwtUtil.generateToken(email, user.getRole().name());
+                String token = jwtUtil.generateToken(email, user.getRole().name(), user.getId().toString());
                 return AuthResponse.builder()
                                 .token(token)
                                 .email(user.getEmail())

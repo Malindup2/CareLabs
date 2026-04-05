@@ -5,6 +5,7 @@ import com.carelabs.appointments.entity.Appointment;
 import com.carelabs.appointments.enums.AppointmentStatus;
 import com.carelabs.appointments.service.AppointmentService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,18 +22,21 @@ public class AppointmentController {
     }
 
     //Book a new appointment
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('PATIENT') and #request.patientId.toString() == authentication.principal)")
     @PostMapping
     public ResponseEntity<Appointment> bookAppointment(@RequestBody AppointmentRequest request) {
         return ResponseEntity.ok(appointmentService.bookAppointment(request));
     }
 
     //View patient history
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('PATIENT') and #patientId.toString() == authentication.principal)")
     @GetMapping("/patient/{patientId}")
     public ResponseEntity<List<Appointment>> getPatientAppointments(@PathVariable UUID patientId) {
         return ResponseEntity.ok(appointmentService.getAppointmentsByPatient(patientId));
     }
 
     //View doctor schedule
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('DOCTOR') and #doctorId.toString() == authentication.principal)")
     @GetMapping("/doctor/{doctorId}")
     public ResponseEntity<List<Appointment>> getDoctorAppointments(@PathVariable UUID doctorId) {
         return ResponseEntity.ok(appointmentService.getAppointmentsByDoctor(doctorId));
