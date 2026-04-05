@@ -5,6 +5,7 @@ import com.carelabs.paymentservice.dto.PaymentInitRequest;
 import com.carelabs.paymentservice.service.PaymentService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,6 +19,7 @@ public class PaymentController {
     }
 
     
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @PostMapping("/initiate")
     public ResponseEntity<PayHereCheckoutResponse> initiatePayment(@RequestBody PaymentInitRequest request) {
         return ResponseEntity.ok(paymentService.initiatePayment(request));
@@ -46,6 +48,7 @@ public class PaymentController {
         }
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @GetMapping("/{id}")
     public ResponseEntity<com.carelabs.paymentservice.entity.Payment> getPaymentById(@PathVariable java.util.UUID id) {
         return ResponseEntity.ok(paymentService.getPaymentById(id));
@@ -56,6 +59,7 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.getPaymentByAppointmentId(id));
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @GetMapping("/history")
     public ResponseEntity<java.util.List<com.carelabs.paymentservice.entity.Payment>> getPaymentHistory() {
         return ResponseEntity.ok(paymentService.getPaymentHistory());
@@ -71,6 +75,7 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.refundPayment(id));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/admin/transactions")
     public ResponseEntity<java.util.List<com.carelabs.paymentservice.entity.Payment>> getAllTransactions() {
         return ResponseEntity.ok(paymentService.getAllPayments());
