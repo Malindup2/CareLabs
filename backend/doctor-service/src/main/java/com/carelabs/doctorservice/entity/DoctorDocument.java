@@ -34,6 +34,9 @@ public class DoctorDocument {
     @Column(nullable = false)
     private String documentUrl;
 
+    @Column
+    private String publicId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private DocumentType type;
