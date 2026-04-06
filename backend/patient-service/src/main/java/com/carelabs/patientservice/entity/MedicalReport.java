@@ -44,4 +44,7 @@ public class MedicalReport {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ReportType type;
+
+    @Column(nullable = false)
+    private String publicId;
 }
