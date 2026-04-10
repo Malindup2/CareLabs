@@ -47,8 +47,6 @@ frontend/out/
 frontend/.vercel/
 
 # ── Environment / Secrets ───────────────────
-.env
-.env.*
 !.env.example
 !**/.env.example
 
@@ -74,3 +72,4 @@ logs/
 *.swp
 *.bak
 *.orig
+config.bat
