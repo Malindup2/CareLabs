@@ -23,3 +23,9 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+
+cloudinary:
+  cloud-name: cloud_name
+  api-key: api_key
+  api-secret: spi_secret
