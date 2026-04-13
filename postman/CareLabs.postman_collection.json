@@ -77,6 +77,20 @@
 				},
 				{
 					"name": "Get My Profile",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.id) {",
+									"  pm.environment.set(\"patientId\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [],
@@ -105,13 +119,30 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n    \"patientId\": \"{{patientId}}\",\r\n    \"doctorId\": \"{{doctorId}}\",\r\n    \"appointmentTime\": \"2024-05-20T10:00:00\"\r\n}",
+							"raw": "{\r\n    \"patientId\": \"{{patientId}}\",\r\n    \"doctorId\": \"{{doctorId}}\",\r\n    \"appointmentTime\": \"2026-04-20T10:00:00\",\r\n    \"type\": \"TELEMEDICINE\",\r\n    \"reason\": \"Routine consultation\"\r\n}",
 							"options": {
 								"raw": {
 									"language": "json"
 								}
 							}
 						},
+						"event": [
+							{
+								"listen": "test",
+								"script": {
+									"exec": [
+										"var jsonData = pm.response.json();",
+										"if (jsonData && jsonData.id) {",
+										"  pm.environment.set(\"appointmentId\", jsonData.id);",
+										"}",
+										"if (jsonData && jsonData.consultationFee) {",
+										"  pm.environment.set(\"appointmentFee\", String(jsonData.consultationFee));",
+										"}"
+									],
+									"type": "text/javascript"
+								}
+							}
+						],
 						"url": {
 							"raw": "{{baseUrl}}/appointments",
 							"host": [
@@ -223,6 +254,23 @@
 			"item": [
 				{
 					"name": "Initiate Checkout",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.orderId) {",
+									"  pm.environment.set(\"orderId\", jsonData.orderId);",
+									"}",
+									"if (jsonData && jsonData.amount) {",
+									"  pm.environment.set(\"paymentAmount\", String(jsonData.amount));",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -237,6 +285,65 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/payments/initiate",
+					{
+						"name": "Webhook: Payment Notify",
+						"event": [
+							{
+								"listen": "prerequest",
+								"script": {
+									"exec": [
+										"var merchantId = pm.environment.get('payhereMerchantId');",
+										"var merchantSecret = pm.environment.get('payhereMerchantSecret');",
+										"var orderId = pm.environment.get('orderId');",
+										"var amount = pm.environment.get('paymentAmount') || '1500.00';",
+										"var currency = pm.environment.get('payhereCurrency') || 'LKR';",
+										"var statusCode = pm.environment.get('paymentStatusCode') || '2';",
+										"var paymentId = pm.environment.get('paymentId') || 'PAYHERE_TEST_TXN';",
+										"var method = pm.environment.get('paymentMethod') || 'CARD';",
+										"var secretHash = CryptoJS.MD5(merchantSecret).toString(CryptoJS.enc.Hex).toUpperCase();",
+										"var md5sig = CryptoJS.MD5(merchantId + orderId + amount + currency + statusCode + secretHash).toString(CryptoJS.enc.Hex).toUpperCase();",
+										"pm.environment.set('md5sig', md5sig);",
+										"pm.environment.set('paymentId', paymentId);",
+										"pm.environment.set('paymentMethod', method);"
+									],
+									"type": "text/javascript"
+								}
+							}
+						],
+						"request": {
+							"method": "POST",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/x-www-form-urlencoded"
+								}
+							],
+							"body": {
+								"mode": "urlencoded",
+								"urlencoded": [
+									{ "key": "merchant_id", "value": "{{payhereMerchantId}}" },
+									{ "key": "order_id", "value": "{{orderId}}" },
+									{ "key": "payment_id", "value": "{{paymentId}}" },
+									{ "key": "payhere_amount", "value": "{{paymentAmount}}" },
+									{ "key": "payhere_currency", "value": "{{payhereCurrency}}" },
+									{ "key": "status_code", "value": "{{paymentStatusCode}}" },
+									{ "key": "md5sig", "value": "{{md5sig}}" },
+									{ "key": "method", "value": "{{paymentMethod}}" }
+								]
+							},
+							"url": {
+								"raw": "{{baseUrl}}/payments/notify",
+								"host": [
+									"{{baseUrl}}"
+								],
+								"path": [
+									"payments",
+									"notify"
+								]
+							}
+						},
+						"response": []
+					},
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -334,6 +441,20 @@
 				},
 				{
 					"name": "Get My Profile (Doctor)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.id) {",
+									"  pm.environment.set(\"doctorId\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [],
@@ -569,6 +690,51 @@
 		{
 			"key": "orderId",
 			"value": "ENTER_UUID_HERE",
+			"type": "string"
+		},
+		{
+			"key": "appointmentFee",
+			"value": "1500.00",
+			"type": "string"
+		},
+		{
+			"key": "payhereMerchantId",
+			"value": "1234826",
+			"type": "string"
+		},
+		{
+			"key": "payhereMerchantSecret",
+			"value": "REPLACE_WITH_REAL_SECRET_IN_ENV",
+			"type": "string"
+		},
+		{
+			"key": "payhereCurrency",
+			"value": "LKR",
+			"type": "string"
+		},
+		{
+			"key": "paymentStatusCode",
+			"value": "2",
+			"type": "string"
+		},
+		{
+			"key": "paymentId",
+			"value": "PAYHERE_TEST_TXN",
+			"type": "string"
+		},
+		{
+			"key": "paymentAmount",
+			"value": "1500.00",
+			"type": "string"
+		},
+		{
+			"key": "paymentMethod",
+			"value": "CARD",
+			"type": "string"
+		},
+		{
+			"key": "md5sig",
+			"value": "",
 			"type": "string"
 		}
 	]

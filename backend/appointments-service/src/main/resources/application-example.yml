@@ -23,3 +23,17 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+pricing:
+  consultation:
+    default-fee: 1500.00
+    in-clinic-fee: 1500.00
+    telemedicine-fee: 1200.00
+
+integration:
+  auth-service:
+    base-url: http://localhost:8081
+  patient-service:
+    base-url: http://localhost:8082
+  doctor-service:
+    base-url: http://localhost:8083

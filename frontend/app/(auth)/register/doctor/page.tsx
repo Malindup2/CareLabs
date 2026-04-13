@@ -6,7 +6,17 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { ArrowRight, ArrowLeft } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
-import { apiPost, AuthResponse } from "@/lib/api";
+import { apiPost, apiPutAuth, AuthResponse, saveAuth } from "@/lib/api";
+
+interface DoctorProfileResponse {
+  id: string;
+  userId: string;
+  fullName: string;
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export default function DoctorRegisterPage() {
   const [firstName, setFirstName] = useState("");
@@ -14,6 +24,10 @@ export default function DoctorRegisterPage() {
   const [email, setEmail] = useState("");
   const [specialization, setSpecialization] = useState("");
   const [licenseNo, setLicenseNo] = useState("");
+  const [experienceYears, setExperienceYears] = useState("0");
+  const [consultationFee, setConsultationFee] = useState("1500");
+  const [qualification, setQualification] = useState("");
+  const [bio, setBio] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -23,12 +37,51 @@ export default function DoctorRegisterPage() {
     setLoading(true);
 
     try {
-      await apiPost<AuthResponse>("/auth/register", {
+      const registerData = await apiPost<AuthResponse>("/auth/register", {
         email,
         password,
         role: "DOCTOR",
       });
-      toast.success("Doctor account created successfully!");
+
+      saveAuth(registerData);
+
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const years = Number.parseInt(experienceYears, 10);
+      const fee = Number.parseFloat(consultationFee);
+
+      let profileSynced = false;
+      let lastProfileError: { status?: number; message?: string } | null = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          await apiPutAuth<DoctorProfileResponse>(
+            "/doctors/me",
+            {
+              fullName,
+              specialty: specialization,
+              slmcNumber: licenseNo.trim() || "PENDING",
+              experienceYears: Number.isNaN(years) ? 0 : years,
+              qualification: qualification.trim() || "PENDING",
+              bio: bio.trim() || "Pending profile details",
+              consultationFee: Number.isNaN(fee) ? 0 : fee,
+            },
+            registerData.token,
+          );
+          profileSynced = true;
+          break;
+        } catch (err: unknown) {
+          const error = err as { status?: number; message?: string };
+          lastProfileError = error;
+          await wait(250 * attempt);
+        }
+      }
+
+      if (!profileSynced) {
+        const statusText = lastProfileError?.status ? ` (HTTP ${lastProfileError.status})` : "";
+        const reasonText = lastProfileError?.message ? ` ${lastProfileError.message}` : "";
+        toast.error(`Doctor account created, but profile sync failed${statusText}.${reasonText}`);
+      } else {
+        toast.success("Doctor account created successfully!");
+      }
       router.push("/login");
     } catch (err: unknown) {
       const error = err as { message?: string };
@@ -92,11 +145,11 @@ export default function DoctorRegisterPage() {
                className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all duration-200"
              >
                 <option value="" disabled>Select Department</option>
-                <option value="cardiology">Cardiology</option>
-                <option value="neurology">Neurology</option>
-                <option value="orthopedics">Orthopedics</option>
-                <option value="pediatrics">Pediatrics</option>
-                <option value="general">General Practice</option>
+                 <option value="Cardiology">Cardiology</option>
+                 <option value="Neurology">Neurology</option>
+                 <option value="Orthopedics">Orthopedics</option>
+                 <option value="Pediatrics">Pediatrics</option>
+                 <option value="General Practice">General Practice</option>
              </select>
           </div>
           <div className="space-y-1.5">
@@ -110,6 +163,57 @@ export default function DoctorRegisterPage() {
               placeholder="MLE-12345"
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700 block ml-1">Experience (Years)</label>
+            <input
+              type="number"
+              min={0}
+              required
+              value={experienceYears}
+              onChange={(e) => setExperienceYears(e.target.value)}
+              className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all duration-200"
+              placeholder="5"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700 block ml-1">Consultation Fee (LKR)</label>
+            <input
+              type="number"
+              min={0}
+              required
+              value={consultationFee}
+              onChange={(e) => setConsultationFee(e.target.value)}
+              className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all duration-200"
+              placeholder="1500"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700 block ml-1">Qualification</label>
+          <input
+            type="text"
+            required
+            value={qualification}
+            onChange={(e) => setQualification(e.target.value)}
+            className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all duration-200"
+            placeholder="MBBS, MD"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700 block ml-1">Short Bio</label>
+          <textarea
+            required
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            rows={3}
+            className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all duration-200"
+            placeholder="Briefly describe your practice and experience"
+          />
         </div>
 
         <div className="space-y-1.5">

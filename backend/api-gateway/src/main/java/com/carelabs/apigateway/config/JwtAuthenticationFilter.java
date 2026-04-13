@@ -3,6 +3,7 @@ package com.carelabs.apigateway.config;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
@@ -38,6 +39,11 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
         return (exchange, chain) -> {
             ServerHttpRequest request = exchange.getRequest();
 
+            // Let browser preflight requests pass through without JWT checks.
+            if (HttpMethod.OPTIONS.equals(request.getMethod())) {
+                return chain.filter(exchange);
+            }
+
             if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
                 return onError(exchange, "Missing Authorization Header", HttpStatus.UNAUTHORIZED);
             }
@@ -59,11 +65,22 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             }
 
             String username = jwtUtil.extractUsername(token);
-            String userId = jwtUtil.extractUserId(token);
+            String userId = null;
+            try {
+                userId = jwtUtil.extractUserId(token);
+            } catch (Exception e) {
+                System.err.println("Failed to extract userId from token: " + e.getMessage());
+                return onError(exchange, "Failed to extract user ID from token", HttpStatus.UNAUTHORIZED);
+            }
+            
+            if (userId == null || userId.isBlank()) {
+                System.err.println("userId is null or blank in token");
+                return onError(exchange, "User ID not found in token", HttpStatus.UNAUTHORIZED);
+            }
             
             ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
                     .header("X-Auth-User", username)
-                    .header("X-Auth-User-Id", userId != null ? userId : "")
+                    .header("X-Auth-User-Id", userId)
                     .header("X-Auth-Role", role)
                     .build();
 

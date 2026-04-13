@@ -11,11 +11,28 @@ export interface ApiError {
   status: number;
 }
 
-export async function apiPost<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+interface RequestOptions {
+  method: HttpMethod;
+  endpoint: string;
+  body?: Record<string, unknown>;
+  token?: string;
+}
+
+async function requestJson<T>({ method, endpoint, body, token }: RequestOptions): Promise<T> {
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_URL}${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   if (!res.ok) {
@@ -30,7 +47,23 @@ export async function apiPost<T>(endpoint: string, body: Record<string, unknown>
     throw err;
   }
 
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   return res.json() as Promise<T>;
+}
+
+export async function apiPost<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+  return requestJson<T>({ method: "POST", endpoint, body });
+}
+
+export async function apiPutAuth<T>(endpoint: string, body: Record<string, unknown>, token: string): Promise<T> {
+  return requestJson<T>({ method: "PUT", endpoint, body, token });
+}
+
+export async function apiGetAuth<T>(endpoint: string, token: string): Promise<T> {
+  return requestJson<T>({ method: "GET", endpoint, token });
 }
 
 export function saveAuth(data: AuthResponse) {

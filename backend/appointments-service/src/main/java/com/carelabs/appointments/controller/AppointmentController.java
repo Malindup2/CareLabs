@@ -43,12 +43,14 @@ public class AppointmentController {
     }
 
     //Get specific appointment details
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
     @GetMapping("/{id}")
     public ResponseEntity<Appointment> getAppointmentById(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.getAppointmentById(id));
     }
 
     //Update appointment status
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DOCTOR')")
     @PutMapping("/{id}/status")
     public ResponseEntity<Appointment> updateStatus(
             @PathVariable UUID id, 
@@ -57,6 +59,7 @@ public class AppointmentController {
     }
 
     //Cancel an appointment
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAppointment(@PathVariable UUID id) {
         appointmentService.deleteAppointment(id);
@@ -64,6 +67,7 @@ public class AppointmentController {
     }
 
     //Reschedule an appointment
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @PutMapping("/{id}")
     public ResponseEntity<Appointment> rescheduleAppointment(
             @PathVariable UUID id, 
@@ -72,6 +76,7 @@ public class AppointmentController {
     }
 
     //Get available slots for a doctor on a specific date
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
     @GetMapping("/available-slots")
     public ResponseEntity<List<java.time.LocalTime>> getAvailableSlots(
             @RequestParam UUID doctorId, 
@@ -80,6 +85,7 @@ public class AppointmentController {
     }
 
     //Get the Video Meeting Link
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
     @GetMapping("/{id}/meeting-link")
     public ResponseEntity<java.util.Map<String, String>> getMeetingLink(@PathVariable UUID id) {
         String link = appointmentService.getMeetingLink(id);
@@ -87,6 +93,7 @@ public class AppointmentController {
     }
 
     //Send a Chat Message
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
     @PostMapping("/{id}/chat")
     public ResponseEntity<com.carelabs.appointments.entity.ChatMessage> sendChatMessage(
             @PathVariable UUID id, 
@@ -95,12 +102,14 @@ public class AppointmentController {
     }
 
     //Get Chat History
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
     @GetMapping("/{id}/chat")
     public ResponseEntity<List<com.carelabs.appointments.entity.ChatMessage>> getChatHistory(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.getChatHistory(id));
     }
 
     //Save a Consultation Note
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DOCTOR')")
     @PostMapping("/{id}/notes")
     public ResponseEntity<com.carelabs.appointments.entity.ConsultationNote> saveNote(
             @PathVariable UUID id, @RequestBody com.carelabs.appointments.entity.ConsultationNote note) {
@@ -108,12 +117,14 @@ public class AppointmentController {
     }
 
     //Get a Consultation Note
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
     @GetMapping("/{id}/notes")
     public ResponseEntity<com.carelabs.appointments.entity.ConsultationNote> getNote(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.getNote(id));
     }
 
     //Save a Prescription
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DOCTOR')")
     @PostMapping("/{id}/prescriptions")
     public ResponseEntity<com.carelabs.appointments.entity.Prescription> savePrescription(
             @PathVariable UUID id, @RequestBody com.carelabs.appointments.entity.Prescription prescription) {
@@ -121,18 +132,21 @@ public class AppointmentController {
     }
 
     //Get a Prescription
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
     @GetMapping("/prescriptions/{id}")
     public ResponseEntity<com.carelabs.appointments.entity.Prescription> getPrescription(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.getPrescription(id));
     }
 
     //Save a Review
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @PostMapping("/{id}/review")
     public ResponseEntity<com.carelabs.appointments.entity.Review> saveReview(
             @PathVariable UUID id, @RequestBody com.carelabs.appointments.entity.Review review) {
         return ResponseEntity.ok(appointmentService.saveReview(id, review));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<List<Appointment>> getAllAppointments() {
         return ResponseEntity.ok(appointmentService.getAllAppointments());

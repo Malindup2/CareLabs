@@ -32,6 +32,9 @@ public class InternalUserController {
                         .id(user.getId())
                         .email(user.getEmail())
                         .role(user.getRole())
+                    .enabled(user.getEnabled())
+                    .lastLoginAt(user.getLastLoginAt())
+                    .createdAt(user.getCreatedAt())
                         .build()))
                 .orElse(ResponseEntity.notFound().build());
     }

@@ -24,6 +24,15 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+pricing:
+  consultation:
+    default-fee: 1500.00
+  platform-fee-ratio: 0.10
+
+integration:
+  appointments-service:
+    base-url: http://localhost:8084
+
 # Payment Gateway Configuration (PayHere / Stripe)
 # payhere:
 #   merchant-id: your_merchant_id

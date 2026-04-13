@@ -18,6 +18,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import com.carelabs.authservice.dto.UserCreatedEvent;
 
 import java.time.LocalDateTime;
 
@@ -29,17 +30,20 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
+    private final org.springframework.kafka.core.KafkaTemplate<String, UserCreatedEvent> kafkaTemplate;
 
     public AuthService(UserRepository userRepository, 
                        PasswordEncoder passwordEncoder, 
                        JwtUtil jwtUtil, 
                        AuthenticationManager authenticationManager, 
-                       UserDetailsService userDetailsService) {
+                       UserDetailsService userDetailsService,
+                       org.springframework.kafka.core.KafkaTemplate<String, UserCreatedEvent> kafkaTemplate) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     public AuthResponse register(RegisterRequest request) {
@@ -54,6 +58,14 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
+
+        // Publish Kafka Event
+        UserCreatedEvent event = UserCreatedEvent.builder()
+                .userId(user.getId())
+                .email(user.getEmail())
+                .role(user.getRole().name())
+                .build();
+        kafkaTemplate.send("user-registration", event);
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
         String token = jwtUtil.generateToken(userDetails, user.getRole().name(), user.getId().toString());
