@@ -624,15 +624,6 @@ export default function DoctorDashboardPage() {
             );
           })}
         </nav>
-        <div className="p-4 border-t border-slate-800">
-          <button
-            onClick={() => setShowLogoutConfirm(true)}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
-          >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
-            <span className="font-semibold text-sm">Logout</span>
-          </button>
-        </div>
       </aside>
 
       {/* Main Content Area */}

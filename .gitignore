@@ -47,8 +47,6 @@ frontend/out/
 frontend/.vercel/
 
 # ── Environment / Secrets ───────────────────
-.env
-.env.*
 !.env.example
 !**/.env.example
 
@@ -74,3 +72,9 @@ logs/
 *.swp
 *.bak
 *.orig
+
+# ── Generated Project Tracking ───────────────
+WORKFLOW_CHECKLIST.md
+INTERCONNECTED_ENDPOINTS_PROGRESS.md
+DOCTOR_DASHBOARD_IMPLEMENTATION.md
+config.bat
