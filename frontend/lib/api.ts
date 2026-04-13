@@ -61,6 +61,10 @@ export async function apiPost<T>(endpoint: string, body: unknown): Promise<T> {
   return requestJson<T>({ method: "POST", endpoint, body });
 }
 
+export async function apiGet<T>(endpoint: string): Promise<T> {
+  return requestJson<T>({ method: "GET", endpoint });
+}
+
 export async function apiPutAuth<T>(endpoint: string, body: unknown, token: string): Promise<T> {
   return requestJson<T>({ method: "PUT", endpoint, body, token });
 }
