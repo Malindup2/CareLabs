@@ -35,6 +35,7 @@ import {
   getRole,
   getToken,
 } from "@/lib/api";
+import { getJitsiRoomName, isJitsiMeetingUrl, toJitsiEmbedUrl } from "@/lib/telemedicine";
 
 const APPOINTMENT_STATUS_OPTIONS = ["PENDING", "CONFIRMED", "ACCEPTED", "REJECTED", "CANCELLED", "COMPLETED", "NO_SHOW"] as const;
 const APPOINTMENT_TYPES = ["IN_CLINIC", "TELEMEDICINE"] as const;
@@ -188,6 +189,8 @@ export default function AppointmentsHubPage() {
   const [rescheduleTime, setRescheduleTime] = useState("");
   const [statusToSet, setStatusToSet] = useState<AppointmentStatus>("CONFIRMED");
   const [meetingLink, setMeetingLink] = useState("");
+  const [meetingLoading, setMeetingLoading] = useState(false);
+  const [showJitsiPreview, setShowJitsiPreview] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatMessage, setChatMessage] = useState("");
   const [noteForm, setNoteForm] = useState<ConsultationNote>({
@@ -256,6 +259,14 @@ export default function AppointmentsHubPage() {
         reason: appointment.reason || "No reason provided",
       }));
   }, [appointments]);
+
+  const isJitsiLink = useMemo(() => isJitsiMeetingUrl(meetingLink), [meetingLink]);
+  const jitsiRoomName = useMemo(() => getJitsiRoomName(meetingLink), [meetingLink]);
+  const jitsiEmbedUrl = useMemo(() => toJitsiEmbedUrl(meetingLink), [meetingLink]);
+  const canPatientJoinMeeting = useMemo(
+    () => (selectedAppointment ? selectedAppointment.status === "ACCEPTED" : false),
+    [selectedAppointment],
+  );
 
   useEffect(() => {
     const jwt = getToken();
@@ -366,6 +377,7 @@ export default function AppointmentsHubPage() {
 
     const loadSelectedDetails = async () => {
       setMeetingLink("");
+      setShowJitsiPreview(false);
       setChatHistory([]);
       setNoteForm({
         appointmentId: selectedAppointmentId,
@@ -400,8 +412,11 @@ export default function AppointmentsHubPage() {
       });
 
       try {
+        const shouldLoadMeeting = selectedAppointment?.type === "TELEMEDICINE";
         const [link, chat, appointment] = await Promise.all([
-          apiGetAuth<{ meetingUrl: string }>(`/appointments/${selectedAppointmentId}/meeting-link`, token).catch(() => null),
+          shouldLoadMeeting
+            ? apiGetAuth<{ meetingUrl: string }>(`/appointments/${selectedAppointmentId}/meeting-link`, token).catch(() => null)
+            : Promise.resolve(null),
           apiGetAuth<ChatMessage[]>(`/appointments/${selectedAppointmentId}/chat`, token).catch(() => []),
           apiGetAuth<Appointment>(`/appointments/${selectedAppointmentId}`, token).catch(() => null),
         ]);
@@ -542,6 +557,63 @@ export default function AppointmentsHubPage() {
     } catch (err: unknown) {
       const error = err as { message?: string };
       toast.error(error.message || "Unable to send message");
+    }
+  };
+
+  const handleRefreshMeeting = async () => {
+    if (!token || !selectedAppointmentId || !selectedAppointment) return;
+    if (selectedAppointment.type !== "TELEMEDICINE") {
+      toast.error("Meeting link is available only for telemedicine appointments.");
+      return;
+    }
+
+    try {
+      setMeetingLoading(true);
+      const response = await apiGetAuth<{ meetingUrl: string }>(`/appointments/${selectedAppointmentId}/meeting-link`, token);
+      setMeetingLink(response.meetingUrl || "");
+      setShowJitsiPreview(false);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      toast.error(error.message || "Unable to load Jitsi meeting link");
+    } finally {
+      setMeetingLoading(false);
+    }
+  };
+
+  const openMeetingWithChecklist = (mode: "START" | "JOIN") => {
+    if (!meetingLink) {
+      toast.error("Load the Jitsi link first.");
+      return;
+    }
+
+    if (mode === "JOIN" && isPatient && !canPatientJoinMeeting) {
+      toast.error("Doctor has not started the meeting yet. Please wait.");
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.alert("Before joining, make sure your microphone and camera are turned on.");
+      window.open(meetingLink, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const handleStartMeeting = async () => {
+    if (!token || !selectedAppointmentId || !selectedAppointment) return;
+
+    if (selectedAppointment.status !== "CONFIRMED" && selectedAppointment.status !== "ACCEPTED") {
+      toast.error("Meeting can start only after payment is confirmed.");
+      return;
+    }
+
+    try {
+      if (selectedAppointment.status !== "ACCEPTED") {
+        await apiPutAuth<Appointment>(`/appointments/${selectedAppointmentId}/status?status=ACCEPTED`, {}, token);
+        await refreshAppointments();
+      }
+      openMeetingWithChecklist("START");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      toast.error(error.message || "Unable to mark meeting as started");
     }
   };
 
@@ -898,10 +970,30 @@ export default function AppointmentsHubPage() {
                       <InfoTile label="Doctor ID" value={selectedAppointment.doctorId.slice(0, 8)} />
                       <InfoTile label="Patient ID" value={selectedAppointment.patientId.slice(0, 8)} />
                     </div>
-                    {meetingLink && (
-                      <a href={meetingLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-bold text-blue-300 hover:text-blue-200 underline break-all">
-                        <Video className="w-4 h-4" /> Open meeting link
-                      </a>
+                    {selectedAppointment.type === "TELEMEDICINE" && (
+                      <div className="rounded-2xl border border-blue-400/30 bg-blue-500/10 p-3 space-y-2">
+                        <p className="text-xs font-bold uppercase tracking-wide text-blue-200">Jitsi Telemedicine</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleRefreshMeeting}
+                            disabled={meetingLoading}
+                            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-xs font-bold"
+                          >
+                            {meetingLoading ? "Loading..." : "Refresh link"}
+                          </button>
+                          {meetingLink && (
+                            <button
+                              type="button"
+                              onClick={() => openMeetingWithChecklist(isPatient ? "JOIN" : "START")}
+                              className="inline-flex items-center gap-2 text-sm font-bold text-blue-200 hover:text-blue-100 underline"
+                            >
+                              <Video className="w-4 h-4" /> {isPatient ? "Join Jitsi" : "Start Jitsi"}
+                            </button>
+                          )}
+                        </div>
+                        {isJitsiLink && jitsiRoomName && <p className="text-xs text-blue-100/80">Room: {jitsiRoomName}</p>}
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -994,6 +1086,69 @@ export default function AppointmentsHubPage() {
                           <Send className="w-4 h-4" /> Send
                         </button>
                       </div>
+                    </ActionPanel>
+
+                    <ActionPanel title="Jitsi Meeting" icon={<Video className="w-4 h-4" />}>
+                      {selectedAppointment.type !== "TELEMEDICINE" ? (
+                        <p className="text-sm text-slate-500">This appointment is in-clinic. Jitsi meeting is not required.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleRefreshMeeting}
+                              disabled={meetingLoading}
+                              className="rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold px-4 py-2.5 text-sm"
+                            >
+                              {meetingLoading ? "Loading link..." : "Load Jitsi link"}
+                            </button>
+                            {meetingLink && (
+                              <button
+                                type="button"
+                                onClick={() => (isPatient ? openMeetingWithChecklist("JOIN") : handleStartMeeting())}
+                                disabled={
+                                  (isPatient && !canPatientJoinMeeting) ||
+                                  (!isPatient && !!selectedAppointment && !["CONFIRMED", "ACCEPTED"].includes(selectedAppointment.status))
+                                }
+                                className="rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isPatient ? "Join appointment" : "Start appointment"}
+                              </button>
+                            )}
+                          </div>
+
+                          {isPatient && !canPatientJoinMeeting && (
+                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                              Join is enabled only after doctor starts the meeting.
+                            </p>
+                          )}
+
+                          {isJitsiLink ? (
+                            <>
+                              {jitsiRoomName && <p className="text-xs text-slate-500">Jitsi room: {jitsiRoomName}</p>}
+                              {meetingLink && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowJitsiPreview((state) => !state)}
+                                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                                >
+                                  {showJitsiPreview ? "Hide embedded Jitsi" : "Show embedded Jitsi"}
+                                </button>
+                              )}
+                              {showJitsiPreview && jitsiEmbedUrl && (
+                                <iframe
+                                  src={jitsiEmbedUrl}
+                                  title="Jitsi Meeting"
+                                  className="w-full h-80 rounded-2xl border border-slate-200"
+                                  allow="camera; microphone; fullscreen; display-capture"
+                                />
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-xs text-slate-500">Current backend should return a Jitsi URL. If this is not a Jitsi link, verify appointment-service meeting-link response.</p>
+                          )}
+                        </div>
+                      )}
                     </ActionPanel>
                   </div>
 

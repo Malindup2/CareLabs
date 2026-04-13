@@ -29,6 +29,7 @@ import {
   getRole,
   getToken,
 } from "@/lib/api";
+import { getJitsiRoomName, isJitsiMeetingUrl, toJitsiEmbedUrl } from "@/lib/telemedicine";
 
 type VerificationStatus = "PENDING" | "APPROVED" | "REJECTED";
 type DocumentType = "LICENSE" | "CERTIFICATE";
@@ -171,6 +172,8 @@ export default function DoctorDashboardPage() {
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string>("");
   const [statusToSet, setStatusToSet] = useState<AppointmentStatus>("CONFIRMED");
   const [meetingLink, setMeetingLink] = useState<string>("");
+  const [meetingLoading, setMeetingLoading] = useState(false);
+  const [showJitsiPreview, setShowJitsiPreview] = useState(false);
 
   const [consultationNote, setConsultationNote] = useState({
     chiefComplaint: "",
@@ -197,6 +200,13 @@ export default function DoctorDashboardPage() {
   }, [appointments]);
 
   const completedAppointments = useMemo(() => appointments.filter((a) => a.status === "COMPLETED"), [appointments]);
+  const selectedAppointment = useMemo(
+    () => appointments.find((a) => a.id === selectedAppointmentId) || null,
+    [appointments, selectedAppointmentId],
+  );
+  const isJitsiLink = useMemo(() => isJitsiMeetingUrl(meetingLink), [meetingLink]);
+  const jitsiRoomName = useMemo(() => getJitsiRoomName(meetingLink), [meetingLink]);
+  const jitsiEmbedUrl = useMemo(() => toJitsiEmbedUrl(meetingLink), [meetingLink]);
 
   const earnings = useMemo(() => {
     const gross = completedAppointments.reduce((sum, a) => sum + (a.consultationFee || 0), 0);
@@ -432,19 +442,65 @@ export default function DoctorDashboardPage() {
   };
 
   const handleFetchMeetingLink = async () => {
-    if (!token || !selectedAppointmentId) {
+    if (!token || !selectedAppointmentId || !selectedAppointment) {
       toast.error("Select a telemedicine appointment first.");
       return;
     }
 
+    if (selectedAppointment.type !== "TELEMEDICINE") {
+      toast.error("Meeting link is available only for telemedicine appointments.");
+      return;
+    }
+
     try {
+      setMeetingLoading(true);
       const data = await apiGetAuth<{ meetingUrl: string }>(`/appointments/${selectedAppointmentId}/meeting-link`, token);
       setMeetingLink(data.meetingUrl);
+      setShowJitsiPreview(false);
     } catch (err: unknown) {
       const e = err as { message?: string };
       toast.error(e.message || "Unable to fetch meeting link");
+    } finally {
+      setMeetingLoading(false);
     }
   };
+
+  const handleStartJitsiCall = async () => {
+    if (!token || !selectedAppointmentId || !selectedAppointment) {
+      toast.error("Select a telemedicine appointment first.");
+      return;
+    }
+
+    if (selectedAppointment.status !== "CONFIRMED" && selectedAppointment.status !== "ACCEPTED") {
+      toast.error("Meeting can start only after payment is confirmed.");
+      return;
+    }
+
+    if (!meetingLink) {
+      toast.error("Load the Jitsi link first.");
+      return;
+    }
+
+    try {
+      if (selectedAppointment.status !== "ACCEPTED") {
+        await apiPutAuth<Appointment>(`/appointments/${selectedAppointmentId}/status?status=ACCEPTED`, {}, token);
+        await refreshAppointments();
+      }
+
+      if (typeof window !== "undefined") {
+        window.alert("Before joining, make sure your microphone and camera are turned on.");
+        window.open(meetingLink, "_blank", "noopener,noreferrer");
+      }
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      toast.error(e.message || "Unable to mark meeting as started");
+    }
+  };
+
+  useEffect(() => {
+    setMeetingLink("");
+    setShowJitsiPreview(false);
+  }, [selectedAppointmentId]);
 
   const handleSaveConsultationNote = async (e: FormEvent) => {
     e.preventDefault();
@@ -989,14 +1045,51 @@ export default function DoctorDashboardPage() {
                 <button type="button" onClick={handleStatusUpdate} disabled={!canConsult} className="w-full px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed">
                   Update Status
                 </button>
-                <button type="button" onClick={handleFetchMeetingLink} disabled={!canConsult} className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                  Get Meeting Link
-                </button>
-                {meetingLink && (
-                  <a href={meetingLink} target="_blank" rel="noreferrer" className="text-sm text-blue-700 underline break-all">
-                    {meetingLink}
-                  </a>
-                )}
+                <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Jitsi Meeting</p>
+                  <p className="text-xs text-slate-600">Type: {selectedAppointment?.type || "-"}</p>
+                  <button
+                    type="button"
+                    onClick={handleFetchMeetingLink}
+                    disabled={!canConsult || selectedAppointment?.type !== "TELEMEDICINE" || meetingLoading}
+                    className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {meetingLoading ? "Loading..." : "Get Jitsi Link"}
+                  </button>
+
+                  {meetingLink && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleStartJitsiCall}
+                        disabled={!selectedAppointment || !["CONFIRMED", "ACCEPTED"].includes(selectedAppointment.status)}
+                        className="w-full px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:bg-blue-300 disabled:cursor-not-allowed"
+                      >
+                        Start appointment call
+                      </button>
+                      {isJitsiLink && jitsiRoomName && <p className="text-xs text-slate-500">Room: {jitsiRoomName}</p>}
+
+                      {isJitsiLink && (
+                        <button
+                          type="button"
+                          onClick={() => setShowJitsiPreview((state) => !state)}
+                          className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm font-bold text-slate-700"
+                        >
+                          {showJitsiPreview ? "Hide embedded Jitsi" : "Show embedded Jitsi"}
+                        </button>
+                      )}
+
+                      {showJitsiPreview && jitsiEmbedUrl && (
+                        <iframe
+                          src={jitsiEmbedUrl}
+                          title="Doctor Jitsi Meeting"
+                          className="w-full h-64 rounded-xl border border-slate-200"
+                          allow="camera; microphone; fullscreen; display-capture"
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               <form onSubmit={handleSaveConsultationNote} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
