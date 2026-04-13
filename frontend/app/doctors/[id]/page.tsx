@@ -224,17 +224,12 @@ export default function DoctorProfile() {
                   )}
 
                   {/* Booking Action */}
-                  <button 
-                    disabled={!selectedSlot}
-                    className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-lg py-4 rounded-2xl shadow-[0_8px_30px_rgb(15,23,42,0.15)] disabled:shadow-none hover:-translate-y-0.5 transition-all flex justify-center items-center gap-2 group"
+                  <Link
+                    href={`/appointments?doctorId=${doctor.id}&date=${selectedDate || ""}`}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-lg py-4 rounded-2xl shadow-[0_8px_30px_rgb(15,23,42,0.15)] hover:-translate-y-0.5 transition-all flex justify-center items-center gap-2 group"
                   >
-                    {!selectedSlot && "Select a Time Slot"}
-                    {selectedSlot && (
-                      <>
-                        Book Appointment <Check className="w-5 h-5 group-hover:scale-125 transition-transform" />
-                      </>
-                    )}
-                  </button>
+                    Open Appointment <Check className="w-5 h-5 group-hover:scale-125 transition-transform" />
+                  </Link>
                   <p className="text-center text-xs text-slate-400 font-medium mt-4">Safe and secure payment gateway ahead</p>
 
                 </div>
