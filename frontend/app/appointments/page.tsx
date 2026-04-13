@@ -244,6 +244,19 @@ export default function AppointmentsHubPage() {
     return { total, upcoming, completed, cancelled };
   }, [appointments]);
 
+  const patientTimeline = useMemo(() => {
+    return [...appointments]
+      .sort((a, b) => new Date(b.appointmentTime).getTime() - new Date(a.appointmentTime).getTime())
+      .slice(0, 6)
+      .map((appointment) => ({
+        id: appointment.id,
+        status: appointment.status,
+        type: appointment.type,
+        appointmentTime: appointment.appointmentTime,
+        reason: appointment.reason || "No reason provided",
+      }));
+  }, [appointments]);
+
   useEffect(() => {
     const jwt = getToken();
     const currentRole = getRole() as Role | null;
@@ -895,6 +908,33 @@ export default function AppointmentsHubPage() {
                   <p className="mt-3 text-slate-300">Pick an appointment from the queue to load the detail actions.</p>
                 )}
               </div>
+
+              {isPatient && (
+                <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm mb-6">
+                  <h3 className="font-bold text-slate-900 text-lg">Recent Timeline</h3>
+                  <p className="text-sm text-slate-500 mt-1 mb-4">Your latest appointment state changes at a glance.</p>
+                  <div className="space-y-3">
+                    {patientTimeline.length > 0 ? (
+                      patientTimeline.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSelectedAppointmentId(item.id)}
+                          className={`w-full text-left rounded-2xl border px-3 py-3 transition ${selectedAppointmentId === item.id ? "border-blue-300 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-bold text-slate-900">{formatDateTime(item.appointmentTime)}</p>
+                            <StatusPill status={item.status} />
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">{item.type} | {item.reason}</p>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500">No appointments available in timeline.</p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {selectedAppointment && (
                 <div className="grid xl:grid-cols-2 gap-6">
