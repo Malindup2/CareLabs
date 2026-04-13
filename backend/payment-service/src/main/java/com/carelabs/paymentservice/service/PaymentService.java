@@ -37,6 +37,12 @@ public class PaymentService {
     @Value("${payhere.notify-url}")
     private String notifyUrl;
 
+    @Value("${payhere.sandbox:true}")
+    private boolean sandboxMode;
+
+    @Value("${app.frontend-base-url:http://localhost:3000}")
+    private String frontendBaseUrl;
+
     private final org.springframework.kafka.core.KafkaTemplate<String, PaymentStatusEvent> kafkaTemplate;
 
     public PayHereCheckoutResponse initiatePayment(PaymentInitRequest request) {
@@ -69,9 +75,10 @@ public class PaymentService {
         //Return the complete package to the React frontend
         return PayHereCheckoutResponse.builder()
                 .merchantId(merchantId)
-                .returnUrl("http://localhost:3000/patient/appointments") 
-                .cancelUrl("http://localhost:3000/patient/checkout") 
+            .returnUrl(frontendBaseUrl + "/appointments")
+            .cancelUrl(frontendBaseUrl + "/appointments")
                 .notifyUrl(notifyUrl) 
+            .checkoutUrl(sandboxMode ? "https://sandbox.payhere.lk/pay/checkout" : "https://www.payhere.lk/pay/checkout")
                 .orderId(orderId)
                 .items("Medical Consultation")
                 .currency(currency)

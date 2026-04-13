@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { ArrowRight, ArrowLeft } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
-import { apiPost, apiPutAuth, AuthResponse, saveAuth } from "@/lib/api";
+import { apiPost, apiPutAuth, AuthResponse, getRole, getToken, saveAuth } from "@/lib/api";
 
 interface DoctorProfileResponse {
   id: string;
@@ -32,25 +32,43 @@ export default function DoctorRegisterPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    const token = getToken();
+    const role = getRole();
+
+    if (token && role === "DOCTOR") {
+      toast("You are already registered as a doctor. Edit details from dashboard profile.");
+      router.replace("/doctor/dashboard");
+    }
+  }, [router]);
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const registerData = await apiPost<AuthResponse>("/auth/register", {
-        email,
-        password,
-        role: "DOCTOR",
-      });
-
-      saveAuth(registerData);
-
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
       const years = Number.parseInt(experienceYears, 10);
       const fee = Number.parseFloat(consultationFee);
 
+      const registerData = await apiPost<AuthResponse>("/auth/register", {
+        email,
+        password,
+        role: "DOCTOR",
+        fullName,
+        specialty: specialization,
+        slmcNumber: licenseNo.trim() || null,
+        experienceYears: Number.isNaN(years) ? 0 : years,
+        qualification: qualification.trim() || null,
+        bio: bio.trim() || null,
+        consultationFee: Number.isNaN(fee) ? 0 : fee,
+      });
+
+      saveAuth(registerData);
+
       let profileSynced = false;
       let lastProfileError: { status?: number; message?: string } | null = null;
+      let activeToken = registerData.token;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         try {
           await apiPutAuth<DoctorProfileResponse>(
@@ -58,22 +76,39 @@ export default function DoctorRegisterPage() {
             {
               fullName,
               specialty: specialization,
-              slmcNumber: licenseNo.trim() || "PENDING",
+              slmcNumber: licenseNo.trim() || null,
               experienceYears: Number.isNaN(years) ? 0 : years,
-              qualification: qualification.trim() || "PENDING",
-              bio: bio.trim() || "Pending profile details",
+              qualification: qualification.trim() || null,
+              bio: bio.trim() || null,
               consultationFee: Number.isNaN(fee) ? 0 : fee,
             },
-            registerData.token,
+            activeToken,
           );
           profileSynced = true;
           break;
         } catch (err: unknown) {
           const error = err as { status?: number; message?: string };
           lastProfileError = error;
+
+          // Some environments may reject the registration token briefly.
+          // Re-login once and retry with a fresh JWT.
+          if ((error.status === 401 || error.status === 403) && attempt === 1) {
+            try {
+              const freshAuth = await apiPost<AuthResponse>("/auth/login", {
+                email,
+                password,
+              });
+              activeToken = freshAuth.token;
+              saveAuth(freshAuth);
+            } catch {
+              // Keep original error path and continue retries.
+            }
+          }
+
           await wait(250 * attempt);
         }
       }
+
 
       if (!profileSynced) {
         const statusText = lastProfileError?.status ? ` (HTTP ${lastProfileError.status})` : "";
@@ -82,7 +117,7 @@ export default function DoctorRegisterPage() {
       } else {
         toast.success("Doctor account created successfully!");
       }
-      router.push("/login");
+      router.push("/doctor/dashboard");
     } catch (err: unknown) {
       const error = err as { message?: string };
       toast.error(error.message || "Registration failed. Please try again.");

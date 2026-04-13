@@ -34,8 +34,10 @@ import {
   clearAuth,
   getRole,
   getToken,
+  getUserIdFromToken,
 } from "@/lib/api";
 import { getJitsiRoomName, isJitsiMeetingUrl, toJitsiEmbedUrl } from "@/lib/telemedicine";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const APPOINTMENT_STATUS_OPTIONS = ["PENDING", "CONFIRMED", "ACCEPTED", "REJECTED", "CANCELLED", "COMPLETED", "NO_SHOW"] as const;
 const APPOINTMENT_TYPES = ["IN_CLINIC", "TELEMEDICINE"] as const;
@@ -134,6 +136,26 @@ interface AppointmentFormState {
   reason: string;
 }
 
+interface PayHereCheckoutResponse {
+  merchantId: string;
+  returnUrl: string;
+  cancelUrl: string;
+  notifyUrl: string;
+  checkoutUrl?: string;
+  orderId: string;
+  items: string;
+  currency: string;
+  amount: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  country: string;
+  hash: string;
+}
+
 const emptyAppointmentForm: AppointmentFormState = {
   doctorId: "",
   appointmentDate: "",
@@ -166,6 +188,59 @@ function getInitials(value: string) {
     .join("");
 }
 
+function splitFullName(value?: string | null) {
+  const normalized = (value || "").trim();
+  if (!normalized) {
+    return { firstName: "CareLabs", lastName: "Patient" };
+  }
+
+  const parts = normalized.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: "Patient" };
+  }
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function submitPayHereCheckout(payload: PayHereCheckoutResponse) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = payload.checkoutUrl || "https://sandbox.payhere.lk/pay/checkout";
+
+  const fields: Record<string, string> = {
+    merchant_id: payload.merchantId,
+    return_url: payload.returnUrl,
+    cancel_url: payload.cancelUrl,
+    notify_url: payload.notifyUrl,
+    order_id: payload.orderId,
+    items: payload.items,
+    currency: payload.currency,
+    amount: payload.amount,
+    first_name: payload.firstName,
+    last_name: payload.lastName,
+    email: payload.email,
+    phone: payload.phone,
+    address: payload.address,
+    city: payload.city,
+    country: payload.country,
+    hash: payload.hash,
+  };
+
+  Object.entries(fields).forEach(([key, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
 export default function AppointmentsHubPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -175,6 +250,7 @@ export default function AppointmentsHubPage() {
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string>("");
+  const [showCancelAppointmentConfirm, setShowCancelAppointmentConfirm] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -463,7 +539,7 @@ export default function AppointmentsHubPage() {
     e.preventDefault();
     if (!token || !patientProfile) return;
 
-    const patientId = patientProfile.userId || patientProfile.id;
+    const patientId = getUserIdFromToken() || patientProfile.userId || patientProfile.id;
     const appointmentTime = toLocalDateTimeValue(appointmentForm.appointmentDate, appointmentForm.appointmentTime);
 
     if (!appointmentForm.doctorId || !appointmentTime) {
@@ -485,10 +561,26 @@ export default function AppointmentsHubPage() {
         token,
       );
 
-      toast.success("Appointment booked successfully.");
+      const { firstName, lastName } = splitFullName(patientProfile.fullName);
+      const fallbackEmail = typeof window !== "undefined" ? (localStorage.getItem("email") || "patient@carelabs.local") : "patient@carelabs.local";
+      const checkoutPayload = await apiPostAuth<PayHereCheckoutResponse>(
+        "/payments/initiate",
+        {
+          appointmentId: created.id,
+          patientFirstName: firstName,
+          patientLastName: lastName,
+          patientEmail: fallbackEmail,
+          patientPhone: patientProfile.phone || "0700000000",
+          patientCity: patientProfile.city || patientProfile.district || "Colombo",
+        },
+        token,
+      );
+
+      toast.success("Appointment booked. Redirecting to PayHere checkout.");
       await refreshAppointments();
       setSelectedAppointmentId(created.id);
       setAppointmentForm((state) => ({ ...state, reason: "" }));
+      submitPayHereCheckout(checkoutPayload);
     } catch (err: unknown) {
       const error = err as { message?: string };
       toast.error(error.message || "Unable to book appointment");
@@ -525,6 +617,11 @@ export default function AppointmentsHubPage() {
 
   const handleStatusUpdate = async () => {
     if (!token || !selectedAppointmentId) return;
+
+    if (isDoctor && !doctorCanConsult) {
+      toast.error("Doctor must be admin-verified before managing consultation actions.");
+      return;
+    }
 
     try {
       await apiPutAuth<Appointment>(`/appointments/${selectedAppointmentId}/status?status=${statusToSet}`, {}, token);
@@ -600,6 +697,11 @@ export default function AppointmentsHubPage() {
   const handleStartMeeting = async () => {
     if (!token || !selectedAppointmentId || !selectedAppointment) return;
 
+    if (isDoctor && !doctorCanConsult) {
+      toast.error("Doctor must be admin-verified before starting consultations.");
+      return;
+    }
+
     if (selectedAppointment.status !== "CONFIRMED" && selectedAppointment.status !== "ACCEPTED") {
       toast.error("Meeting can start only after payment is confirmed.");
       return;
@@ -621,6 +723,11 @@ export default function AppointmentsHubPage() {
     e.preventDefault();
     if (!token || !selectedAppointmentId || !doctorProfile || !patientProfile) return;
 
+    if (isDoctor && !doctorCanConsult) {
+      toast.error("Doctor must be admin-verified before saving consultation notes.");
+      return;
+    }
+
     try {
       await apiPostAuth<ConsultationNote>(
         `/appointments/${selectedAppointmentId}/notes`,
@@ -637,6 +744,11 @@ export default function AppointmentsHubPage() {
   const handleSavePrescription = async (e: FormEvent) => {
     e.preventDefault();
     if (!token || !selectedAppointmentId || !doctorProfile || !patientProfile) return;
+
+    if (isDoctor && !doctorCanConsult) {
+      toast.error("Doctor must be admin-verified before saving prescriptions.");
+      return;
+    }
 
     try {
       await apiPostAuth<Prescription>(
@@ -695,7 +807,8 @@ export default function AppointmentsHubPage() {
 
   const isPatient = role === "PATIENT";
   const isDoctor = role === "DOCTOR";
-  const canManage = isDoctor || role === "ADMIN";
+  const doctorCanConsult = !isDoctor || (doctorProfile?.verificationStatus === "APPROVED" && doctorProfile?.active);
+  const canManage = role === "ADMIN" || (isDoctor && doctorCanConsult);
   const bookingPreview = doctorPreview || null;
 
   return (
@@ -865,7 +978,7 @@ export default function AppointmentsHubPage() {
                       disabled={bookingLoading}
                       className="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3.5 transition"
                     >
-                      {bookingLoading ? "Booking..." : "Book appointment"}
+                      {bookingLoading ? "Booking & preparing payment..." : "Book & continue to payment"}
                     </button>
                   </form>
                 </div>
@@ -985,7 +1098,7 @@ export default function AppointmentsHubPage() {
                           {meetingLink && (
                             <button
                               type="button"
-                              onClick={() => openMeetingWithChecklist(isPatient ? "JOIN" : "START")}
+                              onClick={() => (isPatient ? openMeetingWithChecklist("JOIN") : handleStartMeeting())}
                               className="inline-flex items-center gap-2 text-sm font-bold text-blue-200 hover:text-blue-100 underline"
                             >
                               <Video className="w-4 h-4" /> {isPatient ? "Join Jitsi" : "Start Jitsi"}
@@ -1047,7 +1160,7 @@ export default function AppointmentsHubPage() {
                               Update status
                             </button>
                           </>
-                        ) : (
+                        ) : isPatient ? (
                           <>
                             <label className="block text-sm font-semibold text-slate-700">
                               Reschedule time
@@ -1057,10 +1170,14 @@ export default function AppointmentsHubPage() {
                               Reschedule
                             </button>
                           </>
+                        ) : (
+                          <div className="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                            Doctor consultation actions are enabled only after admin verification is APPROVED.
+                          </div>
                         )}
                       </div>
                       {!canManage && (
-                        <button onClick={handleCancelAppointment} className="mt-3 w-full rounded-2xl border border-rose-200 text-rose-700 font-bold px-4 py-3 hover:bg-rose-50">
+                        <button onClick={() => setShowCancelAppointmentConfirm(true)} className="mt-3 w-full rounded-2xl border border-rose-200 text-rose-700 font-bold px-4 py-3 hover:bg-rose-50">
                           Cancel appointment
                         </button>
                       )}
@@ -1245,6 +1362,20 @@ export default function AppointmentsHubPage() {
           </div>
         </section>
       </main>
+
+      <ConfirmDialog
+        open={showCancelAppointmentConfirm}
+        title="Cancel Appointment"
+        message="Are you sure you want to cancel this appointment?"
+        cancelLabel="Keep"
+        confirmLabel="Yes, Cancel"
+        confirmTone="danger"
+        onCancel={() => setShowCancelAppointmentConfirm(false)}
+        onConfirm={() => {
+          void handleCancelAppointment();
+          setShowCancelAppointmentConfirm(false);
+        }}
+      />
     </div>
   );
 }

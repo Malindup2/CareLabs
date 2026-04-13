@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -10,23 +10,159 @@ import {
 } from "lucide-react";
 import PublicNavbar from "@/components/PublicNavbar";
 import PublicFooter from "@/components/PublicFooter";
-import { MOCK_DOCTORS, SPECIALTIES, IDoctorProfile } from "@/lib/mock-data";
+import { apiGet, apiGetAuth, getRole, getToken } from "@/lib/api";
+
+type VerificationStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+interface LiveDoctor {
+  id: string;
+  userId: string;
+  fullName: string | null;
+  specialty: string | null;
+  bio: string | null;
+  experienceYears: number | null;
+  consultationFee: number | null;
+  qualification: string | null;
+  profileImageUrl: string | null;
+  averageRating: number | null;
+  totalReviews: number | null;
+  verificationStatus: VerificationStatus;
+  active: boolean;
+}
+
+interface PatientProfile {
+  id: string;
+  userId: string;
+}
+
+interface Availability {
+  id?: string;
+  dayOfWeek: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+  startTime: string;
+  endTime: string;
+  slotDuration: number;
+}
+
+function parseMinutes(value: string): number {
+  const [h = "0", m = "0"] = value.split(":");
+  return Number.parseInt(h, 10) * 60 + Number.parseInt(m, 10);
+}
+
+function calculatePublishedSlotCount(rows: Availability[]): number {
+  return rows.reduce((total, row) => {
+    const duration = row.slotDuration > 0 ? row.slotDuration : 30;
+    const start = parseMinutes(row.startTime);
+    const end = parseMinutes(row.endTime);
+    const span = end - start;
+    if (span <= 0) return total;
+    return total + Math.floor(span / duration);
+  }, 0);
+}
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState("All Specialties");
-  const [selectedAvailability, setSelectedAvailability] = useState("Any Time");
-  
-  // Basic filtering based on mock data
-  const filteredDoctors = MOCK_DOCTORS.filter((doc) => {
-    const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          doc.hospital.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSpecialty = selectedSpecialty === "All Specialties" || doc.specialty === selectedSpecialty;
-    const matchesAvailability = selectedAvailability === "Any Time" || 
-                                doc.availability.some(d => d.dayName === selectedAvailability && d.slots.some(s => s.isAvailable));
-    
-    return matchesSearch && matchesSpecialty && matchesAvailability;
-  });
+  const [selectedAvailability, setSelectedAvailability] = useState("Scheduled Doctors");
+  const [doctors, setDoctors] = useState<LiveDoctor[]>([]);
+  const [doctorScheduleCount, setDoctorScheduleCount] = useState<Record<string, number>>({});
+  const [patientBookingCount, setPatientBookingCount] = useState<number | null>(null);
+
+  const refreshPatientBookingCount = async () => {
+    const token = getToken();
+    const role = getRole();
+    if (!token || role !== "PATIENT") {
+      setPatientBookingCount(null);
+      return;
+    }
+
+    try {
+      const profile = await apiGetAuth<PatientProfile>("/patients/me", token);
+      const rows = await apiGetAuth<Array<{ id: string }>>(`/appointments/patient/${profile.userId}`, token);
+      setPatientBookingCount(rows.length);
+    } catch {
+      setPatientBookingCount(null);
+    }
+  };
+
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        const rows = await apiGet<LiveDoctor[]>("/doctors");
+        setDoctors(rows);
+      } catch {
+        setDoctors([]);
+      }
+    };
+
+    void loadDoctors();
+  }, []);
+
+  useEffect(() => {
+    if (doctors.length === 0) {
+      setDoctorScheduleCount({});
+      return;
+    }
+
+    const loadScheduleCounts = async () => {
+      const entries = await Promise.all(
+        doctors.map(async (doc) => {
+          try {
+            const rows = await apiGet<Availability[]>(`/doctors/${doc.id}/availability`);
+            return [doc.id, calculatePublishedSlotCount(rows)] as const;
+          } catch {
+            return [doc.id, 0] as const;
+          }
+        }),
+      );
+
+      setDoctorScheduleCount(Object.fromEntries(entries));
+    };
+
+    void loadScheduleCounts();
+  }, [doctors]);
+
+  useEffect(() => {
+    void refreshPatientBookingCount();
+
+    const handleRefresh = () => {
+      void refreshPatientBookingCount();
+    };
+
+    window.addEventListener("carelabs:appointment-created", handleRefresh);
+    window.addEventListener("storage", handleRefresh);
+    window.addEventListener("focus", handleRefresh);
+
+    return () => {
+      window.removeEventListener("carelabs:appointment-created", handleRefresh);
+      window.removeEventListener("storage", handleRefresh);
+      window.removeEventListener("focus", handleRefresh);
+    };
+  }, []);
+
+  const specialties = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        doctors
+          .map((d) => d.specialty?.trim())
+          .filter((value): value is string => Boolean(value && value.length > 0)),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+
+    return ["All Specialties", ...values];
+  }, [doctors]);
+
+  const filteredDoctors = useMemo(() => {
+    return doctors.filter((doc) => {
+      const matchesSearch =
+        !searchTerm ||
+        `${doc.fullName || ""} ${doc.specialty || ""}`.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSpecialty = selectedSpecialty === "All Specialties" || doc.specialty === selectedSpecialty;
+      const hasPublishedSchedule = (doctorScheduleCount[doc.id] || 0) > 0;
+      const matchesAvailability = selectedAvailability === "All Doctors" ? true : hasPublishedSchedule;
+
+      return matchesSearch && matchesSpecialty && matchesAvailability;
+    });
+  }, [doctors, searchTerm, selectedSpecialty, selectedAvailability, doctorScheduleCount]);
 
   return (
     <div className="min-h-screen bg-slate-50/30 selection:bg-primary/20 selection:text-primary scroll-smooth">
@@ -87,13 +223,17 @@ export default function Home() {
             <div className="flex flex-wrap gap-2 text-sm justify-center items-center">
               <span className="text-xs uppercase tracking-wider font-bold text-slate-300 mr-2 drop-shadow-md">Popular Searches:</span>
               {["Cardiology", "Neurology", "Psychiatry", "Pediatrics"].map((spec) => (
-                <Link 
-                  key={spec} 
-                  href="/doctors" 
+                <button
+                  key={spec}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSpecialty(spec);
+                    document.getElementById("advanced-directory")?.scrollIntoView({ behavior: "smooth" });
+                  }}
                   className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white text-xs font-bold transition-colors border border-white/20 shadow-sm"
                 >
                   {spec}
-                </Link>
+                </button>
               ))}
             </div>
           </div>
@@ -109,6 +249,11 @@ export default function Home() {
                 <h2 className="text-xs font-bold tracking-[0.2em] text-blue-600 uppercase mb-4">Book Instantly</h2>
                 <p className="text-4xl md:text-5xl font-extrabold text-slate-900 mb-6 tracking-tight">Doctor Directory</p>
                 <p className="text-xl text-slate-500 font-medium">Filter by specialty, availability, and symptoms to find the ideal match.</p>
+                {patientBookingCount !== null && (
+                  <p className="mt-4 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                    My total bookings: {patientBookingCount}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -125,7 +270,7 @@ export default function Home() {
                   <div className="mb-6">
                     <h4 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">Specialty</h4>
                     <div className="space-y-2">
-                      {SPECIALTIES.map((spec) => (
+                      {specialties.map((spec) => (
                         <label key={spec} className="flex items-center gap-3 cursor-pointer group">
                           <input 
                             type="radio" 
@@ -146,7 +291,7 @@ export default function Home() {
                   <div className="mb-6">
                     <h4 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">Availability</h4>
                     <div className="space-y-2">
-                      {["Any Time", "Today", "Tomorrow"].map((day) => (
+                      {["Scheduled Doctors", "All Doctors"].map((day) => (
                         <label key={day} className="flex items-center gap-3 cursor-pointer group">
                           <input 
                             type="radio" 
@@ -167,7 +312,7 @@ export default function Home() {
                   <button 
                     onClick={() => {
                       setSelectedSpecialty("All Specialties");
-                      setSelectedAvailability("Any Time");
+                      setSelectedAvailability("Scheduled Doctors");
                       setSearchTerm("");
                     }}
                     className="w-full py-2.5 mt-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 hover:text-slate-900 transition-colors"
@@ -205,7 +350,7 @@ export default function Home() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
                     {filteredDoctors.map((doc) => (
-                      <DoctorCard key={doc.id} doctor={doc} />
+                      <DoctorCard key={doc.id} doctor={doc} scheduleCount={doctorScheduleCount[doc.id] || 0} />
                     ))}
                   </div>
                 )}
@@ -506,7 +651,13 @@ export default function Home() {
   );
 }
 
-function DoctorCard({ doctor }: { doctor: IDoctorProfile }) {
+function DoctorCard({ doctor, scheduleCount }: { doctor: LiveDoctor; scheduleCount: number }) {
+  const name = doctor.fullName || "Doctor";
+  const specialty = doctor.specialty || "General Practice";
+  const rating = doctor.averageRating || 0;
+  const reviewCount = doctor.totalReviews || 0;
+  const fee = doctor.consultationFee || 0;
+
   return (
     <div className="bg-white rounded-[2rem] border border-slate-200/50 p-6 sm:p-7 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] hover:-translate-y-1 hover:border-blue-500/30 transition-all duration-300 flex flex-col h-full group">
       
@@ -514,11 +665,11 @@ function DoctorCard({ doctor }: { doctor: IDoctorProfile }) {
       <div className="flex gap-5 items-start mb-8">
         <div className="relative shrink-0 mt-1">
            <img 
-             src={doctor.imageUrl} 
-             alt={doctor.name} 
+             src={doctor.profileImageUrl || "https://images.unsplash.com/photo-1594824388853-d0c0b4ac4f0b?auto=format&fit=crop&q=80&w=240&h=240"} 
+             alt={name} 
              className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform duration-500" 
            />
-           {doctor.featured && (
+           {doctor.verificationStatus === "APPROVED" && (
              <div className="absolute -top-3 -right-3 bg-gradient-to-tr from-amber-500 to-amber-400 text-white p-1.5 rounded-full shadow-lg transform rotate-12 group-hover:rotate-0 transition-transform duration-300 border-2 border-white" title="Featured">
                <Star className="w-3.5 h-3.5 fill-current" />
              </div>
@@ -530,12 +681,12 @@ function DoctorCard({ doctor }: { doctor: IDoctorProfile }) {
             <div>
               <Link href={`/doctors/${doctor.id}`} className="block">
                 <h3 className="text-[22px] font-extrabold text-slate-900 truncate group-hover:text-blue-600 transition-colors tracking-tight leading-none mb-1.5">
-                  {doctor.name}
+                  {name}
                 </h3>
               </Link>
               <div className="flex items-center gap-2">
                 <span className="text-[11.5px] font-bold text-blue-700 bg-blue-50/80 px-2.5 py-1 rounded-md border border-blue-100/50 uppercase tracking-widest">
-                  {doctor.specialty}
+                  {specialty}
                 </span>
               </div>
             </div>
@@ -544,8 +695,8 @@ function DoctorCard({ doctor }: { doctor: IDoctorProfile }) {
               <div className="flex items-center">
                 <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
               </div>
-              <span className="text-sm font-bold text-slate-700">{doctor.rating}</span> 
-              <span className="text-xs font-semibold text-slate-400">({doctor.reviewCount} reviews)</span>
+              <span className="text-sm font-bold text-slate-700">{rating.toFixed(1)}</span> 
+              <span className="text-xs font-semibold text-slate-400">({reviewCount} reviews)</span>
             </div>
           </div>
         </div>
@@ -557,13 +708,15 @@ function DoctorCard({ doctor }: { doctor: IDoctorProfile }) {
           <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100/60 shrink-0 group-hover:bg-blue-50 transition-colors">
              <MapPin className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
           </div>
-          <span className="text-[15px] text-slate-600 font-medium leading-tight truncate">{doctor.hospital}</span>
+          <span className="text-[15px] text-slate-600 font-medium leading-tight truncate">Sri Lanka</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-emerald-50/50 flex items-center justify-center border border-emerald-100/50 shrink-0">
              <Calendar className="w-4 h-4 text-emerald-500" />
           </div>
-          <span className="text-[15px] text-slate-600 font-medium leading-tight truncate">Available: <span className="text-emerald-600 font-bold">{doctor.availability[0]?.dayName || "Contact for slots"}</span></span>
+          <span className="text-[15px] text-slate-600 font-medium leading-tight truncate">
+            Published slots: <span className="text-emerald-600 font-bold">{scheduleCount}</span>
+          </span>
         </div>
       </div>
 
@@ -571,7 +724,7 @@ function DoctorCard({ doctor }: { doctor: IDoctorProfile }) {
       <div className="pt-6 border-t border-slate-100 flex items-center justify-between mt-auto">
         <div>
           <span className="text-[11px] uppercase tracking-widest font-extrabold text-slate-400 block mb-1">Fee</span>
-          <p className="font-black text-slate-900 text-xl tracking-tight">Rs. {doctor.consultationFee}</p>
+          <p className="font-black text-slate-900 text-xl tracking-tight">Rs. {fee.toLocaleString("en-US")}</p>
         </div>
         <Link 
           href={`/doctors/${doctor.id}`} 

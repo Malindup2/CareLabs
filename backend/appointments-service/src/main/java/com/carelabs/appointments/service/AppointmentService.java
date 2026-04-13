@@ -1,6 +1,8 @@
 package com.carelabs.appointments.service;
 
 import com.carelabs.appointments.dto.AppointmentBookedEvent;
+import com.carelabs.appointments.dto.DoctorAvailabilityView;
+import com.carelabs.appointments.dto.DoctorSlotAllocationItem;
 import com.carelabs.appointments.dto.AppointmentRequest;
 import com.carelabs.appointments.dto.ChatMessageRequest;
 import com.carelabs.appointments.entity.Appointment;
@@ -18,7 +20,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -31,6 +36,7 @@ public class AppointmentService {
     private final ReviewRepository reviewRepository;
     private final BookingValidationService bookingValidationService;
     private final ConsultationPricingService consultationPricingService;
+    private final DoctorScheduleLookupService doctorScheduleLookupService;
     private final org.springframework.kafka.core.KafkaTemplate<String, AppointmentBookedEvent> kafkaTemplate;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
@@ -40,6 +46,7 @@ public class AppointmentService {
                               ReviewRepository reviewRepository,
                               BookingValidationService bookingValidationService,
                               ConsultationPricingService consultationPricingService,
+                              DoctorScheduleLookupService doctorScheduleLookupService,
                               org.springframework.kafka.core.KafkaTemplate<String, AppointmentBookedEvent> kafkaTemplate) {
         this.appointmentRepository = appointmentRepository;
         this.chatMessageRepository = chatMessageRepository;
@@ -48,12 +55,19 @@ public class AppointmentService {
         this.reviewRepository = reviewRepository;
         this.bookingValidationService = bookingValidationService;
         this.consultationPricingService = consultationPricingService;
+        this.doctorScheduleLookupService = doctorScheduleLookupService;
         this.kafkaTemplate = kafkaTemplate;
     }
 
     public Appointment bookAppointment(AppointmentRequest request) {
         bookingValidationService.validatePatientExistsAndActive(request.getPatientId());
         bookingValidationService.validateDoctorExistsAndVerified(request.getDoctorId());
+
+        List<LocalTime> availableSlots = getAvailableSlots(request.getDoctorId(), request.getAppointmentTime().toLocalDate());
+        if (!availableSlots.contains(request.getAppointmentTime().toLocalTime())) {
+            throw new RuntimeException("Requested time is not in doctor's published schedule.");
+        }
+
         if (!isSlotAvailable(request.getDoctorId(), request.getAppointmentTime())) {
             throw new RuntimeException("Doctor is not available at the requested appointment time.");
         }
@@ -66,7 +80,7 @@ public class AppointmentService {
         appointment.setReason(request.getReason());
 
         appointment.setStatus(AppointmentStatus.PENDING);
-        appointment.setDurationMinutes(30);
+        appointment.setDurationMinutes(resolveSlotDuration(request.getDoctorId(), request.getAppointmentTime()));
         appointment.setConsultationFee(consultationPricingService.resolveFee(request.getDoctorId(), request.getType()));
 
         Appointment savedAppointment = appointmentRepository.save(appointment);
@@ -122,18 +136,44 @@ public class AppointmentService {
     }
 
     public List<LocalTime> getAvailableSlots(UUID doctorId, LocalDate date) {
-        List<LocalTime> candidateSlots = List.of(
-                LocalTime.of(9, 0),
-                LocalTime.of(9, 30),
-                LocalTime.of(10, 0),
-                LocalTime.of(14, 0),
-                LocalTime.of(14, 30)
-        );
-
-        return candidateSlots.stream()
+        LocalDateTime now = LocalDateTime.now();
+        return buildScheduleSlotsForDate(doctorId, date).stream()
+            .filter(slot -> LocalDateTime.of(date, slot).isAfter(now))
                 .filter(slot -> isSlotAvailable(doctorId, LocalDateTime.of(date, slot)))
                 .toList();
     }
+
+        public List<DoctorSlotAllocationItem> getDoctorDailySlotAllocation(UUID doctorId, LocalDate date) {
+        List<LocalTime> allSlots = buildScheduleSlotsForDate(doctorId, date);
+        if (allSlots.isEmpty()) {
+            return List.of();
+        }
+
+        LocalDateTime dayStart = date.atStartOfDay();
+        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay().minusNanos(1);
+        Map<LocalTime, Appointment> appointmentByTime = appointmentRepository
+            .findByDoctorIdAndAppointmentTimeBetween(doctorId, dayStart, dayEnd)
+            .stream()
+            .collect(Collectors.toMap(
+                a -> a.getAppointmentTime().toLocalTime(),
+                Function.identity(),
+                (first, second) -> first
+            ));
+
+        return allSlots.stream().map(slot -> {
+            Appointment a = appointmentByTime.get(slot);
+            boolean booked = a != null && a.getStatus() != AppointmentStatus.CANCELLED && a.getStatus() != AppointmentStatus.REJECTED;
+            return DoctorSlotAllocationItem.builder()
+                .slotTime(slot)
+                .booked(booked)
+                .appointmentId(booked ? a.getId() : null)
+                .patientId(booked ? a.getPatientId() : null)
+                .appointmentStatus(booked ? a.getStatus() : null)
+                .appointmentType(booked ? a.getType() : null)
+                .reason(booked ? a.getReason() : null)
+                .build();
+        }).toList();
+        }
 
     private boolean isSlotAvailable(UUID doctorId, LocalDateTime time) {
         List<AppointmentStatus> nonBlockingStatuses = List.of(
@@ -145,6 +185,47 @@ public class AppointmentService {
                 time,
                 nonBlockingStatuses
         );
+    }
+
+    private List<LocalTime> buildScheduleSlotsForDate(UUID doctorId, LocalDate date) {
+        var availabilities = doctorScheduleLookupService.getDoctorAvailability(doctorId).stream()
+                .filter(a -> a.getDayOfWeek() == date.getDayOfWeek())
+                .toList();
+
+        return availabilities.stream()
+                .flatMap(a -> buildSlotsFromAvailability(a).stream())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    private List<LocalTime> buildSlotsFromAvailability(DoctorAvailabilityView availability) {
+        if (availability.getStartTime() == null || availability.getEndTime() == null) {
+            return List.of();
+        }
+        int duration = availability.getSlotDuration() != null && availability.getSlotDuration() > 0
+                ? availability.getSlotDuration()
+                : 30;
+
+        List<LocalTime> slots = new java.util.ArrayList<>();
+        LocalTime current = availability.getStartTime();
+        LocalTime end = availability.getEndTime();
+        while (!current.plusMinutes(duration).isAfter(end)) {
+            slots.add(current);
+            current = current.plusMinutes(duration);
+        }
+        return slots;
+    }
+
+    private int resolveSlotDuration(UUID doctorId, LocalDateTime appointmentTime) {
+        return doctorScheduleLookupService.getDoctorAvailability(doctorId).stream()
+                .filter(a -> a.getDayOfWeek() == appointmentTime.getDayOfWeek())
+                .filter(a -> a.getStartTime() != null && a.getEndTime() != null)
+                .filter(a -> !appointmentTime.toLocalTime().isBefore(a.getStartTime()))
+                .filter(a -> appointmentTime.toLocalTime().isBefore(a.getEndTime()))
+                .map(a -> a.getSlotDuration() != null && a.getSlotDuration() > 0 ? a.getSlotDuration() : 30)
+                .findFirst()
+                .orElse(30);
     }
 
     public String getMeetingLink(UUID appointmentId) {

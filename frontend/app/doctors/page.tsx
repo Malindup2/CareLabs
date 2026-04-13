@@ -25,6 +25,30 @@ interface LiveDoctor {
   active: boolean;
 }
 
+interface Availability {
+  id?: string;
+  dayOfWeek: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+  startTime: string;
+  endTime: string;
+  slotDuration: number;
+}
+
+function parseMinutes(value: string): number {
+  const [h = "0", m = "0"] = value.split(":");
+  return Number.parseInt(h, 10) * 60 + Number.parseInt(m, 10);
+}
+
+function calculatePublishedSlotCount(rows: Availability[]): number {
+  return rows.reduce((total, row) => {
+    const duration = row.slotDuration > 0 ? row.slotDuration : 30;
+    const start = parseMinutes(row.startTime);
+    const end = parseMinutes(row.endTime);
+    const span = end - start;
+    if (span <= 0) return total;
+    return total + Math.floor(span / duration);
+  }, 0);
+}
+
 const FALLBACK_AVATAR =
   "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=300&h=300";
 
@@ -32,10 +56,12 @@ export default function DoctorsDirectory() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [doctors, setDoctors] = useState<LiveDoctor[]>([]);
+  const [doctorScheduleCount, setDoctorScheduleCount] = useState<Record<string, number>>({});
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState("All Specialties");
   const [verificationFilter, setVerificationFilter] = useState("Approved Only");
+  const [scheduleFilter, setScheduleFilter] = useState("Scheduled Doctors");
 
   useEffect(() => {
     const loadDoctors = async () => {
@@ -53,6 +79,30 @@ export default function DoctorsDirectory() {
 
     void loadDoctors();
   }, []);
+
+  useEffect(() => {
+    if (doctors.length === 0) {
+      setDoctorScheduleCount({});
+      return;
+    }
+
+    const loadScheduleCounts = async () => {
+      const entries = await Promise.all(
+        doctors.map(async (doc) => {
+          try {
+            const rows = await apiGet<Availability[]>(`/doctors/${doc.id}/availability`);
+            return [doc.id, calculatePublishedSlotCount(rows)] as const;
+          } catch {
+            return [doc.id, 0] as const;
+          }
+        }),
+      );
+
+      setDoctorScheduleCount(Object.fromEntries(entries));
+    };
+
+    void loadScheduleCounts();
+  }, [doctors]);
 
   const specialties = useMemo(() => {
     const values = Array.from(
@@ -82,9 +132,12 @@ export default function DoctorsDirectory() {
           ? true
           : doc.verificationStatus === "APPROVED";
 
-      return matchesSearch && matchesSpecialty && matchesVerification && doc.active;
+      const hasSchedule = (doctorScheduleCount[doc.id] || 0) > 0;
+      const matchesSchedule = scheduleFilter === "All Schedules" ? true : hasSchedule;
+
+      return matchesSearch && matchesSpecialty && matchesVerification && matchesSchedule && doc.active;
     });
-  }, [doctors, searchTerm, selectedSpecialty, verificationFilter]);
+  }, [doctors, searchTerm, selectedSpecialty, verificationFilter, scheduleFilter, doctorScheduleCount]);
 
   return (
     <div className="min-h-screen bg-slate-50/50 selection:bg-primary/20 selection:text-primary flex flex-col">
@@ -171,10 +224,31 @@ export default function DoctorsDirectory() {
                   </div>
                 </div>
 
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">Schedule</h4>
+                  <div className="space-y-2">
+                    {["Scheduled Doctors", "All Schedules"].map((item) => (
+                      <label key={item} className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="schedule"
+                          checked={scheduleFilter === item}
+                          onChange={() => setScheduleFilter(item)}
+                          className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-600 cursor-pointer"
+                        />
+                        <span className={`text-sm font-medium ${scheduleFilter === item ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"}`}>
+                          {item}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   onClick={() => {
                     setSelectedSpecialty("All Specialties");
                     setVerificationFilter("Approved Only");
+                    setScheduleFilter("Scheduled Doctors");
                     setSearchTerm("");
                   }}
                   className="w-full py-2.5 mt-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 hover:text-slate-900 transition-colors"
@@ -232,7 +306,7 @@ export default function DoctorsDirectory() {
               {!loading && !error && filteredDoctors.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                   {filteredDoctors.map((doc) => (
-                    <DoctorCard key={doc.id} doctor={doc} />
+                    <DoctorCard key={doc.id} doctor={doc} scheduleCount={doctorScheduleCount[doc.id] || 0} />
                   ))}
                 </div>
               )}
@@ -246,7 +320,7 @@ export default function DoctorsDirectory() {
   );
 }
 
-function DoctorCard({ doctor }: { doctor: LiveDoctor }) {
+function DoctorCard({ doctor, scheduleCount }: { doctor: LiveDoctor; scheduleCount: number }) {
   const name = doctor.fullName || "Doctor";
   const specialty = doctor.specialty || "General Practice";
   const rating = doctor.averageRating || 0;
@@ -284,6 +358,9 @@ function DoctorCard({ doctor }: { doctor: LiveDoctor }) {
           <span className="truncate">Sri Lanka</span>
         </div>
         <p className="text-sm text-slate-500 line-clamp-2">{doctor.bio || "Doctor profile available. Open to view details and book an appointment."}</p>
+        <p className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 inline-flex px-2 py-1 rounded-full">
+          Published slots: {scheduleCount}
+        </p>
       </div>
 
       <div className="pt-4 border-t border-slate-100 mt-auto flex items-center justify-between">

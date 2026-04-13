@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -73,20 +74,21 @@ public class DoctorControllerTest {
 
     @Test
     void getMyProfile_MissingHeaders_Unauthorized() throws Exception {
-        // Should return 403 because SecurityConfig requires authenticated state
-        // and HeaderAuthenticationFilter only authenticates if both headers are present.
+        // Missing required request header is resolved as 400 by Spring MVC.
         mockMvc.perform(get("/doctors/me"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
     void verifyDoctor_AdminOnly_Success() throws Exception {
-        Mockito.when(doctorService.verifyDoctor(doctorId, VerificationStatus.APPROVED))
+        UUID adminUserId = UUID.randomUUID();
+
+        Mockito.when(doctorService.verifyDoctor(doctorId, VerificationStatus.APPROVED, adminUserId, null))
                 .thenReturn(mockDoctor);
 
-        mockMvc.perform(get("/doctors/" + doctorId + "/verify")
+        mockMvc.perform(put("/doctors/" + doctorId + "/verify")
                         .param("status", "APPROVED")
-                        .header("X-Auth-User-Id", UUID.randomUUID().toString())
+                        .header("X-Auth-User-Id", adminUserId.toString())
                         .header("X-Auth-Role", "ADMIN"))
                 .andExpect(status().isOk());
     }

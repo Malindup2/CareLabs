@@ -1,7 +1,36 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Activity } from "lucide-react";
+import { clearAuth, getRole, getToken } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 export default function PublicNavbar() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const syncAuth = () => {
+      const token = getToken();
+      const nextRole = getRole();
+      setIsAuthenticated(Boolean(token));
+      setRole(nextRole);
+    };
+
+    syncAuth();
+    window.addEventListener("storage", syncAuth);
+    return () => window.removeEventListener("storage", syncAuth);
+  }, []);
+
+  const handleLogout = () => {
+    clearAuth();
+    setIsAuthenticated(false);
+    setRole(null);
+    router.push("/");
+  };
+
   return (
     <nav className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.02)] transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -30,19 +59,36 @@ export default function PublicNavbar() {
 
           {/* Auth Actions */}
           <div className="hidden md:flex items-center gap-4">
-            <Link 
-              href="/login" 
-              className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-2 transition-colors"
-            >
-              Sign In
-            </Link>
-            <Link 
-              href="/register" 
-              className="relative inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all duration-300 hover:scale-[1.02] shadow-[0_4px_14px_0_rgba(15,23,42,0.15)] overflow-hidden group"
-            >
-              <span className="absolute inset-0 w-full h-full -right-[100%] bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:animate-shimmer"></span>
-              Get Started
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  {role || "User"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="relative inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all duration-300 hover:scale-[1.02] shadow-[0_4px_14px_0_rgba(15,23,42,0.15)]"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-2 transition-colors"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/register"
+                  className="relative inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all duration-300 hover:scale-[1.02] shadow-[0_4px_14px_0_rgba(15,23,42,0.15)] overflow-hidden group"
+                >
+                  <span className="absolute inset-0 w-full h-full -right-[100%] bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:animate-shimmer"></span>
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
 
         </div>
