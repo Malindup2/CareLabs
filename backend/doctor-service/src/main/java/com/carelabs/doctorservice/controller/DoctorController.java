@@ -32,6 +32,11 @@ public class DoctorController {
         return ResponseEntity.ok(doctorService.getDoctorById(id));
     }
 
+    @GetMapping("/{id}/availability")
+    public ResponseEntity<List<Availability>> getDoctorAvailabilityById(@PathVariable UUID id) {
+        return ResponseEntity.ok(doctorService.getAvailabilityByDoctorId(id));
+    }
+
     @GetMapping("/me")
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<Doctor> getMyProfile(@RequestHeader("X-Auth-User-Id") UUID userId) {
@@ -44,6 +49,14 @@ public class DoctorController {
             @RequestHeader("X-Auth-User-Id") UUID userId, 
             @RequestBody Doctor doctorDetails) {
         return ResponseEntity.ok(doctorService.updateMyProfile(userId, doctorDetails));
+    }
+
+    @PostMapping(value = "/me/profile-image", consumes = "multipart/form-data")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<Doctor> uploadMyProfileImage(
+            @RequestHeader("X-Auth-User-Id") UUID userId,
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(doctorService.uploadProfileImage(userId, file));
     }
 
     @PostMapping(value = "/documents", consumes = "multipart/form-data")
@@ -61,6 +74,24 @@ public class DoctorController {
         return ResponseEntity.ok(doctorService.getMyDocuments(userId));
     }
 
+    @GetMapping("/admin/pending")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Doctor>> getPendingDoctors() {
+        return ResponseEntity.ok(doctorService.getPendingDoctors());
+    }
+
+    @GetMapping("/admin/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Doctor>> getAllDoctorsForAdmin() {
+        return ResponseEntity.ok(doctorService.getAllDoctorsForAdmin());
+    }
+
+    @GetMapping("/admin/{id}/documents")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<DoctorDocument>> getDoctorDocumentsForAdmin(@PathVariable UUID id) {
+        return ResponseEntity.ok(doctorService.getDocumentsByDoctorId(id));
+    }
+
     @DeleteMapping("/documents/{id}")
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<Void> deleteDocument(@RequestHeader("X-Auth-User-Id") UUID userId, @PathVariable UUID id) {
@@ -72,6 +103,12 @@ public class DoctorController {
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<Availability> setAvailability(@RequestHeader("X-Auth-User-Id") UUID userId, @RequestBody Availability availability) {
         return ResponseEntity.ok(doctorService.addAvailability(userId, availability));
+    }
+
+    @GetMapping("/availability")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<List<Availability>> getMyAvailability(@RequestHeader("X-Auth-User-Id") UUID userId) {
+        return ResponseEntity.ok(doctorService.getMyAvailability(userId));
     }
 
     @DeleteMapping("/availability/{id}")
@@ -87,9 +124,19 @@ public class DoctorController {
         return ResponseEntity.ok(doctorService.addLeave(userId, leave));
     }
 
+    @GetMapping("/leave")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<List<DoctorLeave>> getMyLeaves(@RequestHeader("X-Auth-User-Id") UUID userId) {
+        return ResponseEntity.ok(doctorService.getMyLeaves(userId));
+    }
+
     @PutMapping("/{id}/verify")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Doctor> verifyDoctor(@PathVariable UUID id, @RequestParam VerificationStatus status) {
-        return ResponseEntity.ok(doctorService.verifyDoctor(id, status));
+    public ResponseEntity<Doctor> verifyDoctor(
+            @PathVariable UUID id,
+            @RequestHeader("X-Auth-User-Id") UUID adminUserId,
+            @RequestParam VerificationStatus status,
+            @RequestParam(required = false) String rejectionReason) {
+        return ResponseEntity.ok(doctorService.verifyDoctor(id, status, adminUserId, rejectionReason));
     }
 }

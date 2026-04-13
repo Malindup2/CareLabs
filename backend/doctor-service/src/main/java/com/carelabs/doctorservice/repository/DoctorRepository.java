@@ -12,6 +12,7 @@ import java.util.UUID;
 @Repository
 public interface DoctorRepository extends JpaRepository<Doctor, UUID> {
     Optional<Doctor> findByUserId(UUID userId);
+    List<Doctor> findByVerificationStatus(VerificationStatus status);
     List<Doctor> findByVerificationStatusAndActiveTrue(VerificationStatus status);
     List<Doctor> findByVerificationStatusAndActiveTrueAndSpecialtyContainingIgnoreCase(VerificationStatus status, String specialty);
 }
