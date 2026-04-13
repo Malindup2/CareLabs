@@ -18,6 +18,11 @@ import {
   TrendingUp,
   Activity,
   Video,
+  Loader2,
+  Upload,
+  Image as ImageIcon,
+  BadgeCheck,
+  RefreshCw,
 } from "lucide-react";
 import {
   apiDeleteAuth,
@@ -30,6 +35,7 @@ import {
   getToken,
 } from "@/lib/api";
 import { getJitsiRoomName, isJitsiMeetingUrl, toJitsiEmbedUrl } from "@/lib/telemedicine";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 type VerificationStatus = "PENDING" | "APPROVED" | "REJECTED";
 type DocumentType = "LICENSE" | "CERTIFICATE";
@@ -40,7 +46,9 @@ interface DoctorProfile {
   id: string;
   userId: string;
   fullName: string | null;
+  profileImageUrl?: string | null;
   specialty: string | null;
+  slmcNumber?: string | null;
   bio: string | null;
   experienceYears: number | null;
   consultationFee: number | null;
@@ -113,6 +121,16 @@ interface Prescription {
   items: PrescriptionItem[];
 }
 
+interface SlotAllocationItem {
+  slotTime: string;
+  booked: boolean;
+  appointmentId?: string | null;
+  patientId?: string | null;
+  appointmentStatus?: AppointmentStatus | null;
+  appointmentType?: AppointmentType | null;
+  reason?: string | null;
+}
+
 const dayOptions: Availability["dayOfWeek"][] = [
   "MONDAY",
   "TUESDAY",
@@ -140,14 +158,22 @@ export default function DoctorDashboardPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "profile" | "verification" | "schedule" | "appointments" | "earnings">("overview");
   const [now, setNow] = useState(new Date());
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [pendingDeleteDocumentId, setPendingDeleteDocumentId] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [documents, setDocuments] = useState<DoctorDocument[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [publishedAvailability, setPublishedAvailability] = useState<Availability[]>([]);
+  const [publishedLeaves, setPublishedLeaves] = useState<DoctorLeave[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [slotAllocationDate, setSlotAllocationDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [slotAllocation, setSlotAllocation] = useState<SlotAllocationItem[]>([]);
+  const [slotAllocationLoading, setSlotAllocationLoading] = useState(false);
 
   const [profileForm, setProfileForm] = useState({
     fullName: "",
     specialty: "",
+    slmcNumber: "",
     bio: "",
     experienceYears: "",
     consultationFee: "",
@@ -156,6 +182,11 @@ export default function DoctorDashboardPage() {
 
   const [docType, setDocType] = useState<DocumentType>("LICENSE");
   const [docFile, setDocFile] = useState<File | null>(null);
+  const [docUploading, setDocUploading] = useState(false);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [profileImageUploading, setProfileImageUploading] = useState(false);
 
   const [availabilityForm, setAvailabilityForm] = useState<Availability>({
     dayOfWeek: "MONDAY",
@@ -283,6 +314,8 @@ export default function DoctorDashboardPage() {
     });
   }, [completedAppointments]);
 
+  const isVerifiedDoctor = profile?.verificationStatus === "APPROVED" && profile?.active === true;
+
   useEffect(() => {
     const role = getRole();
     const jwt = getToken();
@@ -312,23 +345,45 @@ export default function DoctorDashboardPage() {
         setProfileForm({
           fullName: myProfile.fullName ?? "",
           specialty: myProfile.specialty ?? "",
+          slmcNumber: myProfile.slmcNumber ?? "",
           bio: myProfile.bio ?? "",
           experienceYears: myProfile.experienceYears ? String(myProfile.experienceYears) : "",
           consultationFee: myProfile.consultationFee ? String(myProfile.consultationFee) : "",
           qualification: myProfile.qualification ?? "",
         });
 
-        const [myDocuments, myAppointments] = await Promise.all([
-          apiGetAuth<DoctorDocument[]>("/doctors/documents", token),
+        const [appointmentsResult, availabilityResult, leaveResult, documentsResult] = await Promise.allSettled([
           apiGetAuth<Appointment[]>(`/appointments/doctor/${myProfile.id}`, token),
+          apiGetAuth<Availability[]>("/doctors/availability", token),
+          apiGetAuth<DoctorLeave[]>("/doctors/leave", token),
+          apiGetAuth<DoctorDocument[]>("/doctors/documents", token),
         ]);
 
-        setDocuments(myDocuments);
-        setAppointments(myAppointments);
+        if (appointmentsResult.status === "fulfilled") {
+          setAppointments(appointmentsResult.value);
+        }
+
+        if (availabilityResult.status === "fulfilled") {
+          setPublishedAvailability(
+            [...availabilityResult.value].sort((a, b) => dayOptions.indexOf(a.dayOfWeek) - dayOptions.indexOf(b.dayOfWeek)),
+          );
+        }
+
+        if (leaveResult.status === "fulfilled") {
+          setPublishedLeaves(
+            [...leaveResult.value].sort((a, b) => new Date(a.leaveDate).getTime() - new Date(b.leaveDate).getTime()),
+          );
+        }
+
+        if (documentsResult.status === "fulfilled") {
+          setDocuments(documentsResult.value);
+        }
       } catch (err: unknown) {
         const e = err as { message?: string };
         toast.error(e.message || "Failed to load doctor dashboard");
       } finally {
+        setDocumentsLoading(false);
+        setScheduleLoading(false);
         setLoading(false);
       }
     };
@@ -342,8 +397,81 @@ export default function DoctorDashboardPage() {
     setAppointments(rows);
   };
 
-  const handleProfileSave = async (e: FormEvent) => {
-    e.preventDefault();
+  const refreshDocuments = async () => {
+    if (!token) return;
+    setDocumentsLoading(true);
+    try {
+      const rows = await apiGetAuth<DoctorDocument[]>("/doctors/documents", token);
+      setDocuments(rows);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      toast.error(e.message || "Unable to refresh verification documents");
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  const refreshSchedule = async () => {
+    if (!token) return;
+
+    setScheduleLoading(true);
+    try {
+      const [availRows, leaveRows] = await Promise.all([
+        apiGetAuth<Availability[]>('/doctors/availability', token),
+        apiGetAuth<DoctorLeave[]>('/doctors/leave', token),
+      ]);
+
+      setPublishedAvailability(
+        [...availRows].sort((a, b) => dayOptions.indexOf(a.dayOfWeek) - dayOptions.indexOf(b.dayOfWeek)),
+      );
+      setPublishedLeaves(
+        [...leaveRows].sort((a, b) => new Date(a.leaveDate).getTime() - new Date(b.leaveDate).getTime()),
+      );
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      toast.error(e.message || 'Unable to load published schedule');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const refreshSlotAllocation = async () => {
+    if (!token || !profile?.id || !slotAllocationDate) return;
+
+    setSlotAllocationLoading(true);
+    try {
+      const rows = await apiGetAuth<SlotAllocationItem[]>(
+        `/appointments/doctor/${profile.id}/slot-allocation?date=${slotAllocationDate}`,
+        token,
+      );
+      setSlotAllocation(rows);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      toast.error(e.message || "Unable to load slot allocation details");
+    } finally {
+      setSlotAllocationLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!token) return;
+
+    if (activeTab === "verification") {
+      void refreshDocuments();
+    }
+
+    if (activeTab === "schedule") {
+      void refreshSchedule();
+      void refreshSlotAllocation();
+    }
+  }, [activeTab, token]);
+
+  useEffect(() => {
+    if (activeTab !== "schedule") return;
+    void refreshSlotAllocation();
+  }, [slotAllocationDate, activeTab, profile?.id, token]);
+
+  const handleProfileSave = async () => {
     if (!token) return;
 
     try {
@@ -351,7 +479,9 @@ export default function DoctorDashboardPage() {
         "/doctors/me",
         {
           fullName: profileForm.fullName,
+          profileImageUrl: profile?.profileImageUrl || null,
           specialty: profileForm.specialty,
+          slmcNumber: profileForm.slmcNumber,
           bio: profileForm.bio,
           experienceYears: profileForm.experienceYears ? Number(profileForm.experienceYears) : null,
           consultationFee: profileForm.consultationFee ? Number(profileForm.consultationFee) : null,
@@ -367,6 +497,43 @@ export default function DoctorDashboardPage() {
     }
   };
 
+  const handleProfileImageUpload = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!token || !profileImageFile) {
+      toast.error("Please choose a profile image first.");
+      return;
+    }
+
+    try {
+      setProfileImageUploading(true);
+      const formData = new FormData();
+      formData.append("file", profileImageFile);
+      const updated = await apiPostAuthFormData<DoctorProfile>("/doctors/me/profile-image", formData, token);
+      setProfile(updated);
+      setProfileImageFile(null);
+      toast.success("Profile image uploaded.");
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      toast.error(e.message || "Unable to upload profile image (check doctor login/session)." );
+    } finally {
+      setProfileImageUploading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!profileImageFile) {
+      setProfileImagePreview(null);
+      return;
+    }
+
+    const nextPreview = URL.createObjectURL(profileImageFile);
+    setProfileImagePreview(nextPreview);
+
+    return () => {
+      URL.revokeObjectURL(nextPreview);
+    };
+  }, [profileImageFile]);
+
   const handleUploadDocument = async (e: FormEvent) => {
     e.preventDefault();
     if (!token || !docFile) {
@@ -375,16 +542,19 @@ export default function DoctorDashboardPage() {
     }
 
     try {
+      setDocUploading(true);
       const formData = new FormData();
       formData.append("file", docFile);
       formData.append("type", docType);
-      const created = await apiPostAuthFormData<DoctorDocument>("/doctors/documents", formData, token);
-      setDocuments((prev) => [created, ...prev]);
+      await apiPostAuthFormData<DoctorDocument>("/doctors/documents", formData, token);
       setDocFile(null);
+      await refreshDocuments();
       toast.success("Document uploaded for verification.");
     } catch (err: unknown) {
       const e = err as { message?: string };
       toast.error(e.message || "Document upload failed");
+    } finally {
+      setDocUploading(false);
     }
   };
 
@@ -392,7 +562,7 @@ export default function DoctorDashboardPage() {
     if (!token) return;
     try {
       await apiDeleteAuth(`/doctors/documents/${id}`, token);
-      setDocuments((prev) => prev.filter((d) => d.id !== id));
+      await refreshDocuments();
       toast.success("Document deleted.");
     } catch (err: unknown) {
       const e = err as { message?: string };
@@ -406,6 +576,7 @@ export default function DoctorDashboardPage() {
     try {
       await apiPostAuth<Availability>("/doctors/availability", availabilityForm, token);
       toast.success("Availability slot added.");
+      await refreshSchedule();
     } catch (err: unknown) {
       const e = err as { message?: string };
       toast.error(e.message || "Unable to add availability");
@@ -419,6 +590,7 @@ export default function DoctorDashboardPage() {
       await apiPostAuth<DoctorLeave>("/doctors/leave", leaveForm, token);
       setLeaveForm({ leaveDate: "", reason: "" });
       toast.success("Leave day recorded.");
+      await refreshSchedule();
     } catch (err: unknown) {
       const e = err as { message?: string };
       toast.error(e.message || "Unable to add leave");
@@ -428,6 +600,11 @@ export default function DoctorDashboardPage() {
   const handleStatusUpdate = async () => {
     if (!token || !selectedAppointmentId) {
       toast.error("Select an appointment first.");
+      return;
+    }
+
+    if (!isVerifiedDoctor) {
+      toast.error("Admin verification approval is required before consultation actions.");
       return;
     }
 
@@ -471,6 +648,11 @@ export default function DoctorDashboardPage() {
       return;
     }
 
+    if (!isVerifiedDoctor) {
+      toast.error("Admin verification approval is required before starting consultations.");
+      return;
+    }
+
     if (selectedAppointment.status !== "CONFIRMED" && selectedAppointment.status !== "ACCEPTED") {
       toast.error("Meeting can start only after payment is confirmed.");
       return;
@@ -509,6 +691,11 @@ export default function DoctorDashboardPage() {
       return;
     }
 
+    if (!isVerifiedDoctor) {
+      toast.error("Admin verification approval is required before saving consultation notes.");
+      return;
+    }
+
     const selected = appointments.find((a) => a.id === selectedAppointmentId);
     if (!selected) {
       toast.error("Appointment not found.");
@@ -537,6 +724,11 @@ export default function DoctorDashboardPage() {
     e.preventDefault();
     if (!token || !selectedAppointmentId || !profile) {
       toast.error("Select an appointment first.");
+      return;
+    }
+
+    if (!isVerifiedDoctor) {
+      toast.error("Admin verification approval is required before saving prescriptions.");
       return;
     }
 
@@ -640,8 +832,9 @@ export default function DoctorDashboardPage() {
       : profile.verificationStatus === "REJECTED"
         ? "text-rose-700 bg-rose-50 border-rose-200"
         : "text-amber-700 bg-amber-50 border-amber-200";
-  const canConsult = profile.verificationStatus === "APPROVED" && profile.active;
-  const greetingName = profile.fullName?.trim() || "Doctor";
+  const canConsult = isVerifiedDoctor;
+  const doctorName = profile.fullName?.trim() || "Consultant";
+  const greetingName = `Dr. ${doctorName}`;
   const maxMonthlyRevenue = Math.max(...monthlyRevenue.map((m) => m.value), 1);
 
   return (
@@ -694,20 +887,38 @@ export default function DoctorDashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <div className="hidden sm:block text-right">
               <p className="text-xs text-slate-500 font-semibold">Welcome back</p>
-              <p className="text-sm font-bold text-slate-900">{greetingName}</p>
+              <div className="flex items-center justify-end gap-1">
+                <p className="text-sm font-bold text-slate-900">{greetingName}</p>
+                {profile.verificationStatus === "APPROVED" && (
+                  <BadgeCheck className="w-4 h-4 text-blue-600" />
+                )}
+              </div>
             </div>
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold tracking-wide ${verificationTone}`}>
-              {profile.verificationStatus === "APPROVED" ? (
-                <CheckCircle2 className="w-4 h-4" />
-              ) : profile.verificationStatus === "REJECTED" ? (
-                <XCircle className="w-4 h-4" />
-              ) : (
-                <AlertCircle className="w-4 h-4" />
-              )}
-              VERIFICATION: {profile.verificationStatus}
-            </div>
+            {profile?.profileImageUrl ? (
+              <img
+                src={profile.profileImageUrl}
+                alt="Doctor"
+                className="h-10 w-10 rounded-full object-cover border border-slate-200"
+              />
+            ) : (
+              <div className="h-10 w-10 rounded-full bg-slate-100 text-slate-600 font-bold grid place-items-center text-xs border border-slate-200">
+                {doctorName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+          </div>
+            {profile.verificationStatus !== "APPROVED" && (
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold tracking-wide ${verificationTone}`}>
+                {profile.verificationStatus === "REJECTED" ? (
+                  <XCircle className="w-4 h-4" />
+                ) : (
+                  <AlertCircle className="w-4 h-4" />
+                )}
+                VERIFICATION: {profile.verificationStatus}
+              </div>
+            )}
             <button
               onClick={() => setShowLogoutConfirm(true)}
               className="px-3 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition"
@@ -728,8 +939,8 @@ export default function DoctorDashboardPage() {
               <StatCard title="Upcoming" value={String(appointmentStats.upcoming)} subtitle="Pending and confirmed" icon={<Clock className="w-4 h-4 text-blue-600" />} />
               <StatCard title="Completed" value={String(appointmentStats.completed)} subtitle="Finished consultations" icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} />
               <StatCard title="Cancelled" value={String(appointmentStats.cancelled)} subtitle="Cancelled or rejected" icon={<XCircle className="w-4 h-4 text-rose-600" />} />
-              <StatCard title="Telemedicine" value={String(appointmentMix.telemedicine)} subtitle="Remote sessions" icon={<Video className="w-4 h-4 text-blue-600" />} />
-              <StatCard title="Projected LKR" value={formatLkr(earnings.upcomingValue)} subtitle="Upcoming appointment value" icon={<TrendingUp className="w-4 h-4 text-blue-600" />} />
+              <StatCard title="Published Slots" value={String(publishedAvailability.length)} subtitle="Weekly schedule entries" icon={<CalendarDays className="w-4 h-4 text-blue-600" />} />
+              <StatCard title="Leave Entries" value={String(publishedLeaves.length)} subtitle="Published leave days" icon={<TrendingUp className="w-4 h-4 text-blue-600" />} />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -862,11 +1073,90 @@ export default function DoctorDashboardPage() {
         )}
 
         {activeTab === "profile" && (
-          <form onSubmit={handleProfileSave} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
             <h2 className="text-lg font-bold text-slate-900">Profile Information</h2>
+            <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50">
+              <div className="flex items-center gap-4">
+                {profileImagePreview ? (
+                  <img
+                    src={profileImagePreview}
+                    alt="Selected profile preview"
+                    className="h-16 w-16 rounded-full object-cover border border-blue-200"
+                  />
+                ) : profile?.profileImageUrl ? (
+                  <img
+                    src={profile.profileImageUrl}
+                    alt="Doctor profile"
+                    className="h-16 w-16 rounded-full object-cover border border-slate-200"
+                  />
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-slate-200 text-slate-600 font-bold grid place-items-center">
+                    {(profileForm.fullName || "DR").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="text-sm text-slate-600">
+                  <p className="font-semibold text-slate-800">Profile picture</p>
+                  <p>Upload an image to Cloudinary and save its secure URL on your profile.</p>
+                  {profileImageFile && (
+                    <p className="mt-1 text-xs text-blue-700 font-semibold">
+                      Staged: {profileImageFile.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <form onSubmit={handleProfileImageUpload} className="mt-3 space-y-3">
+                <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 bg-white px-4 py-5 text-center hover:border-blue-400 hover:bg-blue-50/40 transition">
+                  <div className="flex flex-col items-center gap-2 text-slate-600">
+                    <Upload className="w-5 h-5" />
+                    <p className="text-sm font-semibold">Click to choose profile image</p>
+                    <p className="text-xs">PNG, JPG, WEBP recommended</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setProfileImageFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                </label>
+
+                {profileImageFile && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center gap-2 text-blue-800">
+                      <ImageIcon className="w-4 h-4" />
+                      <span className="font-semibold">{profileImageFile.name}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setProfileImageFile(null)}
+                      className="text-xs font-bold text-blue-700 hover:text-blue-900"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={!profileImageFile || profileImageUploading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white text-sm font-bold"
+                >
+                  {profileImageUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
+                    </>
+                  ) : (
+                    "Upload picture"
+                  )}
+                </button>
+                {profileImageUploading && (
+                  <p className="text-xs text-slate-500">Please wait while we upload your image to Cloudinary...</p>
+                )}
+              </form>
+            </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <Input label="Full Name" value={profileForm.fullName} onChange={(value) => setProfileForm((s) => ({ ...s, fullName: value }))} required />
               <Input label="Specialty" value={profileForm.specialty} onChange={(value) => setProfileForm((s) => ({ ...s, specialty: value }))} required />
+              <Input label="SLMC Number" value={profileForm.slmcNumber} onChange={(value) => setProfileForm((s) => ({ ...s, slmcNumber: value }))} required />
               <Input label="Experience (years)" type="number" value={profileForm.experienceYears} onChange={(value) => setProfileForm((s) => ({ ...s, experienceYears: value }))} />
               <Input label="Consultation Fee" type="number" value={profileForm.consultationFee} onChange={(value) => setProfileForm((s) => ({ ...s, consultationFee: value }))} />
               <Input label="Qualification" value={profileForm.qualification} onChange={(value) => setProfileForm((s) => ({ ...s, qualification: value }))} />
@@ -880,8 +1170,8 @@ export default function DoctorDashboardPage() {
                 />
               </label>
             </div>
-            <button className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">Save Profile</button>
-          </form>
+            <button type="button" onClick={handleProfileSave} className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">Save Profile</button>
+          </div>
         )}
 
         {activeTab === "verification" && (
@@ -899,21 +1189,38 @@ export default function DoctorDashboardPage() {
                   <option value="CERTIFICATE">CERTIFICATE</option>
                 </select>
               </label>
-              <label className="text-sm font-semibold text-slate-700 block">
-                File
+              <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:border-blue-400 hover:bg-blue-50/40 transition">
+                <div className="flex flex-col items-center gap-2 text-slate-600">
+                  <Upload className="w-5 h-5" />
+                  <p className="text-sm font-semibold">Choose a verification file</p>
+                  <p className="text-xs">PDF, JPG, PNG</p>
+                </div>
                 <input
                   type="file"
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  className="hidden"
                   onChange={(e) => setDocFile(e.target.files?.[0] || null)}
                   required
                 />
               </label>
-              <button className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">Upload Document</button>
+              {docFile && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 font-semibold">
+                  Staged file: {docFile.name}
+                </div>
+              )}
+              <button disabled={!docFile || docUploading} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-bold">
+                {docUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : "Upload Document"}
+              </button>
             </form>
 
             <div className="bg-white border border-slate-200 rounded-2xl p-5">
-              <h2 className="text-lg font-bold text-slate-900">Submitted Documents</h2>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-bold text-slate-900">Submitted Documents</h2>
+                <button type="button" onClick={() => void refreshDocuments()} className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-900">
+                  <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                </button>
+              </div>
               <ul className="mt-3 space-y-2">
+                {documentsLoading && <li className="text-sm text-slate-500">Loading documents...</li>}
                 {documents.map((doc) => (
                   <li key={doc.id} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
                     <div>
@@ -925,64 +1232,173 @@ export default function DoctorDashboardPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleDeleteDocument(doc.id)}
+                      onClick={() => setPendingDeleteDocumentId(doc.id)}
                       className="text-xs font-bold px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700"
                     >
                       Delete
                     </button>
                   </li>
                 ))}
-                {documents.length === 0 && <li className="text-sm text-slate-500">No documents uploaded yet.</li>}
+                {!documentsLoading && documents.length === 0 && <li className="text-sm text-slate-500">No documents uploaded yet.</li>}
               </ul>
             </div>
           </div>
         )}
 
         {activeTab === "schedule" && (
-          <div className="grid lg:grid-cols-2 gap-4">
-            <form onSubmit={handleAddAvailability} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
-              <h2 className="text-lg font-bold text-slate-900">Add Weekly Availability</h2>
-              <label className="text-sm font-semibold text-slate-700 block">
-                Day
-                <select
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                  value={availabilityForm.dayOfWeek}
-                  onChange={(e) => setAvailabilityForm((s) => ({ ...s, dayOfWeek: e.target.value as Availability["dayOfWeek"] }))}
-                >
-                  {dayOptions.map((day) => (
-                    <option key={day} value={day}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <Input label="Start Time" type="time" value={availabilityForm.startTime} onChange={(value) => setAvailabilityForm((s) => ({ ...s, startTime: value }))} />
-                <Input label="End Time" type="time" value={availabilityForm.endTime} onChange={(value) => setAvailabilityForm((s) => ({ ...s, endTime: value }))} />
+          <div className="space-y-4">
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-100 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Published Schedule</h2>
+                <p className="text-sm text-slate-600">Manage your weekly slots and published leave dates from one place.</p>
               </div>
-              <Input
-                label="Slot Duration (minutes)"
-                type="number"
-                value={String(availabilityForm.slotDuration)}
-                onChange={(value) => setAvailabilityForm((s) => ({ ...s, slotDuration: Number(value || 30) }))}
-              />
-              <button className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">Save Availability</button>
-            </form>
+              <button
+                type="button"
+                onClick={() => void refreshSchedule()}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-200 text-blue-700 text-xs font-bold hover:bg-blue-100"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh schedule
+              </button>
+            </div>
 
-            <form onSubmit={handleAddLeave} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
-              <h2 className="text-lg font-bold text-slate-900">Add Leave Day</h2>
-              <Input label="Leave Date" type="date" value={leaveForm.leaveDate} onChange={(value) => setLeaveForm((s) => ({ ...s, leaveDate: value }))} required />
-              <label className="text-sm font-semibold text-slate-700 block">
-                Reason
-                <textarea
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                  rows={3}
-                  value={leaveForm.reason}
-                  onChange={(e) => setLeaveForm((s) => ({ ...s, reason: e.target.value }))}
+            <div className="grid xl:grid-cols-3 gap-4">
+              <form onSubmit={handleAddAvailability} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 xl:col-span-1">
+                <h3 className="text-base font-bold text-slate-900">Add Weekly Availability</h3>
+                <label className="text-sm font-semibold text-slate-700 block">
+                  Day
+                  <select
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    value={availabilityForm.dayOfWeek}
+                    onChange={(e) => setAvailabilityForm((s) => ({ ...s, dayOfWeek: e.target.value as Availability["dayOfWeek"] }))}
+                  >
+                    {dayOptions.map((day) => (
+                      <option key={day} value={day}>
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Start Time" type="time" value={availabilityForm.startTime} onChange={(value) => setAvailabilityForm((s) => ({ ...s, startTime: value }))} />
+                  <Input label="End Time" type="time" value={availabilityForm.endTime} onChange={(value) => setAvailabilityForm((s) => ({ ...s, endTime: value }))} />
+                </div>
+                <Input
+                  label="Slot Duration (minutes)"
+                  type="number"
+                  value={String(availabilityForm.slotDuration)}
+                  onChange={(value) => setAvailabilityForm((s) => ({ ...s, slotDuration: Number(value || 30) }))}
                 />
-              </label>
-              <button className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">Save Leave</button>
-            </form>
+                <button className="w-full px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">Publish Availability</button>
+              </form>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 xl:col-span-2">
+                <h3 className="text-base font-bold text-slate-900 mb-3">Weekly Published Slots</h3>
+                {scheduleLoading ? (
+                  <p className="text-sm text-slate-500">Loading published availability...</p>
+                ) : publishedAvailability.length === 0 ? (
+                  <p className="text-sm text-slate-500 rounded-xl border border-dashed border-slate-200 p-4">No availability published yet.</p>
+                ) : (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {publishedAvailability.map((slot) => (
+                      <div key={slot.id || `${slot.dayOfWeek}-${slot.startTime}`} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                        <p className="text-xs font-bold uppercase tracking-wide text-blue-700">{slot.dayOfWeek}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{slot.startTime} - {slot.endTime}</p>
+                        <p className="text-xs text-slate-500 mt-1">{slot.slotDuration} min slots</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid xl:grid-cols-3 gap-4">
+              <form onSubmit={handleAddLeave} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 xl:col-span-1">
+                <h3 className="text-base font-bold text-slate-900">Publish Leave Date</h3>
+                <Input label="Leave Date" type="date" value={leaveForm.leaveDate} onChange={(value) => setLeaveForm((s) => ({ ...s, leaveDate: value }))} required />
+                <label className="text-sm font-semibold text-slate-700 block">
+                  Reason
+                  <textarea
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    rows={3}
+                    value={leaveForm.reason}
+                    onChange={(e) => setLeaveForm((s) => ({ ...s, reason: e.target.value }))}
+                    placeholder="Conference, vacation, medical emergency..."
+                  />
+                </label>
+                <button className="w-full px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">Publish Leave</button>
+              </form>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 xl:col-span-2">
+                <h3 className="text-base font-bold text-slate-900 mb-3">Published Leave Calendar</h3>
+                {scheduleLoading ? (
+                  <p className="text-sm text-slate-500">Loading leave dates...</p>
+                ) : publishedLeaves.length === 0 ? (
+                  <p className="text-sm text-slate-500 rounded-xl border border-dashed border-slate-200 p-4">No leave dates published.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {publishedLeaves.map((leave) => (
+                      <div key={leave.id || leave.leaveDate} className="rounded-xl border border-slate-200 p-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{new Date(leave.leaveDate).toLocaleDateString()}</p>
+                          <p className="text-xs text-slate-500 mt-1">{leave.reason || "No reason provided"}</p>
+                        </div>
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full">
+                          Leave
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h3 className="text-base font-bold text-slate-900">Daily Slot Allocation</h3>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={slotAllocationDate}
+                    onChange={(e) => setSlotAllocationDate(e.target.value)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void refreshSlotAllocation()}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-700"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Reload
+                  </button>
+                </div>
+              </div>
+
+              {slotAllocationLoading ? (
+                <p className="text-sm text-slate-500">Loading slot allocation...</p>
+              ) : slotAllocation.length === 0 ? (
+                <p className="text-sm text-slate-500 rounded-xl border border-dashed border-slate-200 p-4">No slot allocation for selected date.</p>
+              ) : (
+                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {slotAllocation.map((item) => (
+                    <div key={`${slotAllocationDate}-${item.slotTime}`} className={`rounded-xl border p-3 ${item.booked ? "border-blue-200 bg-blue-50/70" : "border-slate-200 bg-slate-50/70"}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-bold text-slate-900">{item.slotTime}</p>
+                        <span className={`text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${item.booked ? "text-blue-700 bg-blue-100" : "text-slate-600 bg-slate-200"}`}>
+                          {item.booked ? "Booked" : "Free"}
+                        </span>
+                      </div>
+                      {item.booked && (
+                        <div className="mt-2 space-y-1 text-xs text-slate-600">
+                          <p>Patient: <span className="font-semibold text-slate-900">{item.patientId?.slice(0, 8)}...</span></p>
+                          <p>Status: <span className="font-semibold text-slate-900">{item.appointmentStatus}</span></p>
+                          <p>Type: <span className="font-semibold text-slate-900">{item.appointmentType}</span></p>
+                          <p className="line-clamp-2">Reason: <span className="font-semibold text-slate-900">{item.reason || "-"}</span></p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1124,31 +1540,35 @@ export default function DoctorDashboardPage() {
         </div>
       </main>
 
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center px-4">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 p-6">
-            <h3 className="text-lg font-bold text-slate-900">Confirm Logout</h3>
-            <p className="mt-2 text-sm text-slate-600">Are you sure you want to logout?</p>
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-sm font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  clearAuth();
-                  router.replace("/login");
-                }}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
-              >
-                Yes, Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        title="Confirm Logout"
+        message="Are you sure you want to logout?"
+        cancelLabel="Cancel"
+        confirmLabel="Yes, Logout"
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          clearAuth();
+          router.replace("/login");
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDeleteDocumentId}
+        title="Delete Document"
+        message="Are you sure you want to delete this document?"
+        cancelLabel="Cancel"
+        confirmLabel="Yes, Delete"
+        confirmTone="danger"
+        onCancel={() => setPendingDeleteDocumentId(null)}
+        onConfirm={() => {
+          if (pendingDeleteDocumentId) {
+            void handleDeleteDocument(pendingDeleteDocumentId);
+          }
+          setPendingDeleteDocumentId(null);
+        }}
+      />
     </div>
   );
 }

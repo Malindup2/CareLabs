@@ -107,6 +107,22 @@ export function getRole(): string | null {
   return null;
 }
 
+export function getUserIdFromToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+
+    const payload = JSON.parse(atob(parts[1]));
+    return typeof payload.userId === "string" ? payload.userId : null;
+  } catch {
+    return null;
+  }
+}
+
 export function clearAuth() {
   if (typeof window !== "undefined") {
     localStorage.removeItem("token");
