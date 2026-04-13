@@ -32,7 +32,7 @@ export default function LoginPage() {
           router.push("/doctor/dashboard");
           break;
         default:
-          router.push("/patient/dashboard");
+          router.push("/");
       }
     } catch (err: unknown) {
       const error = err as { message?: string };

@@ -59,11 +59,18 @@ public class AuthService {
 
         userRepository.save(user);
 
-        // Publish Kafka Event
+        // Publish Kafka event with optional doctor bootstrap data.
         UserCreatedEvent event = UserCreatedEvent.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
                 .role(user.getRole().name())
+                .fullName(request.getFullName())
+                .specialty(request.getSpecialty())
+                .slmcNumber(request.getSlmcNumber())
+                .experienceYears(request.getExperienceYears())
+                .qualification(request.getQualification())
+                .bio(request.getBio())
+                .consultationFee(request.getConsultationFee())
                 .build();
         kafkaTemplate.send("user-registration", event);
 

@@ -7,6 +7,7 @@ import com.carelabs.doctorservice.repository.DoctorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -22,29 +23,61 @@ public class UserRegistrationConsumer {
     public void consume(UserCreatedEvent event) {
         log.info("Received UserCreatedEvent: {}", event);
 
-        if ("DOCTOR".equalsIgnoreCase(event.getRole())) {
-            if (doctorRepository.findByUserId(event.getUserId()).isPresent()) {
-                log.info("Doctor profile already exists for userId: {}", event.getUserId());
-                return;
-            }
-
-            Doctor doctor = new Doctor();
-            doctor.setUserId(event.getUserId());
-            doctor.setFullName("Pending Profile"); // Placeholder
-            doctor.setSpecialty("PENDING");
-            doctor.setSlmcNumber("PENDING");
-            doctor.setExperienceYears(0);
-            doctor.setQualification("PENDING");
-            doctor.setBio("Pending Profile");
-            doctor.setProfileImageUrl("");
-            doctor.setConsultationFee(BigDecimal.ZERO);
-            doctor.setAverageRating(0.0);
-            doctor.setTotalReviews(0);
-            doctor.setVerificationStatus(VerificationStatus.PENDING);
-            doctor.setActive(false);
-            
-            doctorRepository.save(doctor);
-            log.info("Created base doctor profile for userId: {}", event.getUserId());
+        if (!"DOCTOR".equalsIgnoreCase(event.getRole())) {
+            return;
         }
+
+        Doctor doctor = doctorRepository.findByUserId(event.getUserId())
+                .orElseGet(() -> buildNewDoctor(event));
+
+        mergeDoctorRegistrationData(doctor, event);
+
+        try {
+            doctorRepository.save(doctor);
+            log.info("Upserted doctor profile for userId: {}", event.getUserId());
+        } catch (DataIntegrityViolationException ex) {
+            // Another path created the same userId profile concurrently.
+            log.info("Doctor profile already exists after concurrent create for userId: {}", event.getUserId());
+        }
+    }
+
+    private Doctor buildNewDoctor(UserCreatedEvent event) {
+        Doctor doctor = new Doctor();
+        doctor.setUserId(event.getUserId());
+        doctor.setProfileImageUrl("");
+        doctor.setAverageRating(0.0);
+        doctor.setTotalReviews(0);
+        doctor.setVerificationStatus(VerificationStatus.PENDING);
+        doctor.setActive(false);
+        doctor.setConsultationFee(BigDecimal.ZERO);
+        return doctor;
+    }
+
+    private void mergeDoctorRegistrationData(Doctor doctor, UserCreatedEvent event) {
+        if (hasText(event.getFullName())) {
+            doctor.setFullName(event.getFullName().trim());
+        }
+        if (hasText(event.getSpecialty())) {
+            doctor.setSpecialty(event.getSpecialty().trim());
+        }
+        if (hasText(event.getSlmcNumber())) {
+            doctor.setSlmcNumber(event.getSlmcNumber().trim());
+        }
+        if (event.getExperienceYears() != null) {
+            doctor.setExperienceYears(event.getExperienceYears());
+        }
+        if (hasText(event.getQualification())) {
+            doctor.setQualification(event.getQualification().trim());
+        }
+        if (hasText(event.getBio())) {
+            doctor.setBio(event.getBio().trim());
+        }
+        if (event.getConsultationFee() != null) {
+            doctor.setConsultationFee(event.getConsultationFee());
+        }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }
