@@ -11,6 +11,7 @@ public class PayHereCheckoutResponse {
     private String returnUrl;
     private String cancelUrl;
     private String notifyUrl;
+    private String checkoutUrl;
     private String orderId;
     private String items;
     private String currency;
