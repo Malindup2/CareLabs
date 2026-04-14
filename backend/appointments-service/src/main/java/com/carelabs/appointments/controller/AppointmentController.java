@@ -1,6 +1,7 @@
 package com.carelabs.appointments.controller;
 
 import com.carelabs.appointments.dto.AppointmentRequest;
+import com.carelabs.appointments.dto.AppointmentResponse;
 import com.carelabs.appointments.entity.Appointment;
 import com.carelabs.appointments.enums.AppointmentStatus;
 import com.carelabs.appointments.service.AppointmentService;
@@ -45,7 +46,7 @@ public class AppointmentController {
     //View doctor schedule
     @PreAuthorize("hasRole('ADMIN') or hasRole('DOCTOR')")
     @GetMapping("/doctor/{doctorId}")
-    public ResponseEntity<List<Appointment>> getDoctorAppointments(@PathVariable UUID doctorId,
+    public ResponseEntity<List<AppointmentResponse>> getDoctorAppointments(@PathVariable UUID doctorId,
                                                                    Authentication authentication) {
         ensureDoctorOwnsRequestedDoctorId(doctorId, authentication);
         return ResponseEntity.ok(appointmentService.getAppointmentsByDoctor(doctorId));

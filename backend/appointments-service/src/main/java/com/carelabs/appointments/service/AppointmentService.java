@@ -4,6 +4,7 @@ import com.carelabs.appointments.dto.AppointmentBookedEvent;
 import com.carelabs.appointments.dto.DoctorAvailabilityView;
 import com.carelabs.appointments.dto.DoctorSlotAllocationItem;
 import com.carelabs.appointments.dto.AppointmentRequest;
+import com.carelabs.appointments.dto.AppointmentResponse;
 import com.carelabs.appointments.dto.ChatMessageRequest;
 import com.carelabs.appointments.entity.Appointment;
 import com.carelabs.appointments.entity.ChatMessage;
@@ -101,8 +102,27 @@ public class AppointmentService {
         return appointmentRepository.findByPatientId(patientId);
     }
 
-    public List<Appointment> getAppointmentsByDoctor(UUID doctorId) {
-        return appointmentRepository.findByDoctorId(doctorId);
+    public List<AppointmentResponse> getAppointmentsByDoctor(UUID doctorId) {
+        List<Appointment> appointments = appointmentRepository.findByDoctorId(doctorId);
+        return appointments.stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    private AppointmentResponse mapToResponse(Appointment a) {
+        return AppointmentResponse.builder()
+                .id(a.getId())
+                .patientId(a.getPatientId())
+                .patientFullName(bookingValidationService.getPatientFullName(a.getPatientId()))
+                .doctorId(a.getDoctorId())
+                .appointmentTime(a.getAppointmentTime())
+                .durationMinutes(a.getDurationMinutes())
+                .status(a.getStatus())
+                .type(a.getType())
+                .reason(a.getReason())
+                .consultationFee(a.getConsultationFee())
+                .meetingLink(a.getMeetingLink())
+                .build();
     }
 
     public Appointment getAppointmentById(UUID id) {

@@ -118,6 +118,15 @@ public class DoctorController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/availability/{id}")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<Availability> updateAvailability(
+            @RequestHeader("X-Auth-User-Id") UUID userId, 
+            @PathVariable UUID id, 
+            @RequestBody Availability availability) {
+        return ResponseEntity.ok(doctorService.updateAvailability(userId, id, availability));
+    }
+
     @PostMapping("/leave")
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<DoctorLeave> addLeave(@RequestHeader("X-Auth-User-Id") UUID userId, @RequestBody DoctorLeave leave) {
@@ -128,6 +137,22 @@ public class DoctorController {
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<List<DoctorLeave>> getMyLeaves(@RequestHeader("X-Auth-User-Id") UUID userId) {
         return ResponseEntity.ok(doctorService.getMyLeaves(userId));
+    }
+
+    @DeleteMapping("/leave/{id}")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<Void> removeLeave(@RequestHeader("X-Auth-User-Id") UUID userId, @PathVariable UUID id) {
+        doctorService.removeLeave(userId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/leave/{id}")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<DoctorLeave> updateLeave(
+            @RequestHeader("X-Auth-User-Id") UUID userId, 
+            @PathVariable UUID id, 
+            @RequestBody DoctorLeave leave) {
+        return ResponseEntity.ok(doctorService.updateLeave(userId, id, leave));
     }
 
     @PutMapping("/{id}/verify")

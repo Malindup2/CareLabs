@@ -165,13 +165,13 @@ export default function Home() {
   }, [doctors, searchTerm, selectedSpecialty, selectedAvailability, doctorScheduleCount]);
 
   return (
-    <div className="min-h-screen bg-slate-50/30 selection:bg-primary/20 selection:text-primary scroll-smooth">
+    <div suppressHydrationWarning className="min-h-screen bg-slate-50/30 selection:bg-primary/20 selection:text-primary scroll-smooth">
       <PublicNavbar />
 
       <main className="pt-20">
         
         {/* --- 0. HERO SECTION (1% Polish) --- */}
-        <section className="relative pt-32 pb-40 lg:pt-48 lg:pb-56 flex items-center justify-center overflow-hidden">
+        <section suppressHydrationWarning className="relative pt-32 pb-40 lg:pt-48 lg:pb-56 flex items-center justify-center overflow-hidden">
           <div className="absolute inset-0 z-0">
             <img 
               src="/images/login.png" 
