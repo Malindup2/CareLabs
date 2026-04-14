@@ -32,7 +32,7 @@ export default function PublicNavbar() {
   };
 
   return (
-    <nav className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.02)] transition-all duration-300">
+    <nav suppressHydrationWarning className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.02)] transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
           

@@ -6,7 +6,23 @@
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.3-brightgreen)](#)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](#)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-blue)](#)
+[![Status](https://img.shields.io/badge/Status-95%25_Completed-success)](#)
 [![License](https://img.shields.io/badge/License-Academic-lightgrey)](#license)
+
+---
+
+##  Project Status: 95% Completed
+
+We have successfully wired the core operational workflows and integrated front-to-back connectivity across all microservices, reaching an overall completion of **95%**. 
+
+**Recent Milestones Achieved:**
+- ✅ **Fully Functional Identity Management:** Registration and authentication workflows for patients and doctors are secured with role-based access.
+- ✅ **Doctor Clinical Operations:** Doctors can manage availability schedules and profiles seamlessly.
+- ✅ **Booking & Appointments Engine:** Complete slot-allocation logic and lifecycle management.
+- ✅ **Financial Payment Systems:** Integration with PayHere Sandbox is fully wired, bridging the checkout flow to appointment confirmation via Kafka messaging.
+- ✅ **Polished Application Shell:** A dynamic UI with responsive dashboards and integrated Telemedicine (Jitsi).
+
+Detailed tracking matrix available at: [tracking/PROJECT_COMPLETION_PROGRESS.md](tracking/PROJECT_COMPLETION_PROGRESS.md)
 
 ---
 

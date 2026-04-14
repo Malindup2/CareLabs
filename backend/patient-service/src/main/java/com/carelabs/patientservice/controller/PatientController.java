@@ -38,6 +38,12 @@ public class PatientController {
         return patientService.getMyProfile(userId);
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DOCTOR')")
+    @GetMapping("/internal/{userId}")
+    public PatientProfileResponse getPatientProfile(@PathVariable UUID userId) {
+        return patientService.getMyProfile(userId);
+    }
+
     @PreAuthorize("hasRole('PATIENT')")
     @PutMapping("/me")
     public PatientProfileResponse updateMyProfile(@Valid @RequestBody UpdatePatientProfileRequest request) {

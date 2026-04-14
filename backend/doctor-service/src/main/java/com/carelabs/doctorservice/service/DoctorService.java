@@ -172,6 +172,22 @@ public class DoctorService {
         availabilityRepository.deleteById(availabilityId);
     }
 
+    public Availability updateAvailability(UUID userId, UUID availabilityId, Availability updateDetails) {
+        Doctor doctor = getDoctorByUserId(userId);
+        Availability existing = availabilityRepository.findById(availabilityId)
+                .orElseThrow(() -> new RuntimeException("Availability slot not found"));
+        
+        if (!existing.getDoctorId().equals(doctor.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        existing.setDayOfWeek(updateDetails.getDayOfWeek());
+        existing.setStartTime(updateDetails.getStartTime());
+        existing.setEndTime(updateDetails.getEndTime());
+        existing.setSlotDuration(updateDetails.getSlotDuration());
+        return availabilityRepository.save(existing);
+    }
+
     public DoctorLeave addLeave(UUID userId, DoctorLeave leave) {
         Doctor doctor = getDoctorByUserId(userId);
         ensureDoctorApprovedForPublishing(doctor);
@@ -182,6 +198,31 @@ public class DoctorService {
     public List<DoctorLeave> getMyLeaves(UUID userId) {
         UUID doctorId = getDoctorByUserId(userId).getId();
         return leaveRepository.findByDoctorId(doctorId);
+    }
+
+    public void removeLeave(UUID userId, UUID leaveId) {
+        Doctor doctor = getDoctorByUserId(userId);
+        DoctorLeave existing = leaveRepository.findById(leaveId)
+                .orElseThrow(() -> new RuntimeException("Leave date not found"));
+        
+        if (!existing.getDoctorId().equals(doctor.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+        leaveRepository.deleteById(leaveId);
+    }
+
+    public DoctorLeave updateLeave(UUID userId, UUID leaveId, DoctorLeave updateDetails) {
+        Doctor doctor = getDoctorByUserId(userId);
+        DoctorLeave existing = leaveRepository.findById(leaveId)
+                .orElseThrow(() -> new RuntimeException("Leave date not found"));
+        
+        if (!existing.getDoctorId().equals(doctor.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        existing.setLeaveDate(updateDetails.getLeaveDate());
+        existing.setReason(updateDetails.getReason());
+        return leaveRepository.save(existing);
     }
 
     private void ensureDoctorApprovedForPublishing(Doctor doctor) {

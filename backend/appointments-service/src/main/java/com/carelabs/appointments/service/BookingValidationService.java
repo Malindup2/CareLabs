@@ -65,4 +65,26 @@ public class BookingValidationService {
             throw new RuntimeException("Doctor validation failed");
         }
     }
+
+    public String getPatientFullName(UUID patientId) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Auth-User-Id", patientId.toString());
+            headers.set("X-Auth-Role", "DOCTOR");
+
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    patientServiceBaseUrl + "/patients/internal/" + patientId,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    Map.class
+            );
+            Map<?, ?> body = response.getBody();
+            if (body != null && body.get("fullName") != null) {
+                return String.valueOf(body.get("fullName"));
+            }
+        } catch (Exception e) {
+            // Named lookup failed - fallback to Unknown Patient
+        }
+        return "Unknown Patient";
+    }
 }
