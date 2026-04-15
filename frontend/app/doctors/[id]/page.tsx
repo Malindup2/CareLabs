@@ -319,14 +319,19 @@ export default function DoctorProfile() {
     void loadPatientContext();
   }, [token, role]);
 
+  const ensureAuth = () => {
+    if (!token || !isPatient) {
+      toast.error("Please login to make an appointment.");
+      router.push("/login");
+      return false;
+    }
+    return true;
+  };
+
   const handleBookAndPay = async () => {
     if (!doctor) return;
 
-    if (!token || !isPatient) {
-      toast.error("Please login as a patient to book an appointment.");
-      router.push("/login");
-      return;
-    }
+    if (!ensureAuth()) return;
 
     if (!patientProfile?.userId) {
       toast.error("Patient profile is not ready yet. Please try again.");
@@ -534,8 +539,13 @@ export default function DoctorProfile() {
                       <input
                         type="date"
                         value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm bg-white"
+                        onClick={(e) => {
+                          if (!ensureAuth()) {
+                            e.preventDefault();
+                          }
+                        }}
+                        onChange={(e) => ensureAuth() && setSelectedDate(e.target.value)}
+                        className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm bg-white cursor-pointer"
                       />
                     </label>
 
@@ -574,8 +584,8 @@ export default function DoctorProfile() {
                           <button
                             key={slot}
                             type="button"
-                            onClick={() => setSelectedTime(slot)}
-                            className={`rounded-2xl border px-3 py-3 text-sm font-bold transition text-left ${selectedTime === slot ? "border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-200"}`}
+                            onClick={() => ensureAuth() && setSelectedTime(slot)}
+                            className={`rounded-2xl border px-3 py-3 text-sm font-bold transition text-left cursor-pointer ${selectedTime === slot ? "border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-200"}`}
                           >
                             {formatClock(slot)}
                           </button>
@@ -664,7 +674,7 @@ export default function DoctorProfile() {
                   <button
                     type="button"
                     onClick={handleBookAndPay}
-                    disabled={bookingLoading || !isPatient || !selectedTime}
+                    disabled={bookingLoading || !selectedTime}
                     className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold text-lg py-4 rounded-2xl shadow-[0_8px_30px_rgb(15,23,42,0.15)] hover:-translate-y-0.5 transition-all flex justify-center items-center gap-2 group"
                   >
                     {bookingLoading ? "Booking..." : selectedTime ? "Book & Continue to Payment" : "Select a time slot"}

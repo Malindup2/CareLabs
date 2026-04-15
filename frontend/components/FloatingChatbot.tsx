@@ -90,7 +90,7 @@ export default function FloatingChatbot() {
         onClick={() => setOpen(true)}
       >
         <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        <Bot className="h-8 w-8 text-blue-500 group-hover:text-blue-400 transition-colors" />
+        <Stethoscope className="h-8 w-8 text-blue-500 group-hover:text-blue-400 transition-colors" />
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500 shadow-[0_0_10px_#3b82f6] animate-pulse" />
       </button>
 
