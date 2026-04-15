@@ -139,16 +139,30 @@ export default function FloatingChatbot() {
                 <div className="h-16 w-16 rounded-[2rem] bg-white border border-slate-100 shadow-sm flex items-center justify-center text-slate-300">
                   <Activity className="h-8 w-8" />
                 </div>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">Diagnostic Portal</p>
-                  <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
-                    Welcome. Describe your symptoms in natural language for a preliminary clinical assessment and specialist recommendation.
-                  </p>
-                </div>
-                <div className="pt-4 grid grid-cols-2 gap-2 w-full">
-                  <QuickSuggestion icon={<Stethoscope className="w-3 h-3"/>} text="Abdominal Pain" onClick={() => setInput("I've been having sharp pains in my upper abdomen for 2 days.")}/>
-                  <QuickSuggestion icon={<Activity className="w-3 h-3"/>} text="Constant Headache" onClick={() => setInput("I have a persistent headache and sensitivity to light.")}/>
-                </div>
+                {!token ? (
+                  <div className="space-y-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-red-500">Authentication Required</p>
+                    <p className="text-sm font-medium text-slate-600">
+                      Please sign in to access Clinical Intelligence diagnostics.
+                    </p>
+                    <a href="/login" className="inline-block px-6 py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-600 transition-colors">
+                      Go to Login
+                    </a>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">Diagnostic Portal</p>
+                      <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
+                        Welcome. Describe your symptoms in natural language for a preliminary clinical assessment and specialist recommendation.
+                      </p>
+                    </div>
+                    <div className="pt-4 grid grid-cols-2 gap-2 w-full">
+                      <QuickSuggestion icon={<Stethoscope className="w-3 h-3"/>} text="Abdominal Pain" onClick={() => setInput("I've been having sharp pains in my upper abdomen for 2 days.")}/>
+                      <QuickSuggestion icon={<Activity className="w-3 h-3"/>} text="Constant Headache" onClick={() => setInput("I have a persistent headache and sensitivity to light.")}/>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               messages.map((msg, i) => (

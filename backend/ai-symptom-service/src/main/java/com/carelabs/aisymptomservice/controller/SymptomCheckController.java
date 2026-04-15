@@ -17,7 +17,7 @@ public class SymptomCheckController {
         this.symptomCheckService = symptomCheckService;
     }
 
-    @PreAuthorize("hasRole('PATIENT')")
+    @PreAuthorize("hasRole('PATIENT') or hasRole('DOCTOR') or hasRole('ADMIN')")
     @PostMapping("/symptom-check")
     public SymptomCheckResponse symptomCheck(@Valid @RequestBody SymptomCheckRequest request) {
         return symptomCheckService.analyzeSymptoms(request.getSymptoms());
