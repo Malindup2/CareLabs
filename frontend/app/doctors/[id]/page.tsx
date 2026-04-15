@@ -251,6 +251,24 @@ export default function DoctorProfile() {
       try {
         const rows = await apiGet<DoctorAvailability[]>(`/doctors/${id}/availability`);
         setAvailability(rows);
+
+        // Auto-select the next available date if the current selected date has no slots
+        if (rows.length > 0) {
+          const availableDays = rows.map((a) => a.dayOfWeek.toUpperCase());
+          let checkDate = new Date();
+          
+          // Check next 14 days for a match
+          for (let i = 0; i < 14; i++) {
+            const dateStr = checkDate.toISOString().split("T")[0];
+            const dayName = getDayOfWeek(dateStr).toUpperCase();
+            
+            if (availableDays.includes(dayName)) {
+              setSelectedDate(dateStr);
+              break;
+            }
+            checkDate.setDate(checkDate.getDate() + 1);
+          }
+        }
       } catch {
         setAvailability([]);
       } finally {
@@ -714,10 +732,10 @@ export default function DoctorProfile() {
                             <select
                               value={appointmentType}
                               onChange={(e) => setAppointmentType(e.target.value as "TELEMEDICINE" | "IN_CLINIC")}
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
                             >
-                              <option value="TELEMEDICINE">Telemedicine</option>
-                              <option value="IN_CLINIC">In-Clinic</option>
+                              <option value="TELEMEDICINE" className="text-slate-900">Telemedicine</option>
+                              <option value="IN_CLINIC" className="text-slate-900">In-Clinic</option>
                             </select>
                           </label>
                           <div className="space-y-2">
@@ -728,16 +746,16 @@ export default function DoctorProfile() {
                           </div>
                         </div>
 
-                        <label className="block space-y-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Reason for Visit</p>
-                          <textarea
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            rows={2}
-                            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-xs font-medium focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                            placeholder="Optional: Symptoms or symptoms..."
-                          />
-                        </label>
+                          <label className="block space-y-2">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Reason for Visit</p>
+                            <textarea
+                              value={reason}
+                              onChange={(e) => setReason(e.target.value)}
+                              rows={2}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                              placeholder="Describe symptoms or reason..."
+                            />
+                          </label>
                       </div>
 
                       <button

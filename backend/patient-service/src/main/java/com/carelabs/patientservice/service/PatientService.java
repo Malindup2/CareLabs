@@ -212,6 +212,33 @@ public class PatientService {
                 .toList();
     }
 
+    public void deletePatient(UUID id) {
+        Patient patient = patientRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+        
+        UUID userId = patient.getUserId();
+
+        // 1. Delete Medical Reports (including Cloudinary)
+        List<com.carelabs.patientservice.entity.MedicalReport> reports = medicalReportRepository.findByPatientId(userId);
+        for (com.carelabs.patientservice.entity.MedicalReport report : reports) {
+            try {
+                if (report.getPublicId() != null) {
+                    cloudinaryService.deleteFile(report.getPublicId());
+                }
+            } catch (Exception e) {
+                // Ignore Cloudinary errors but log if possible
+            }
+        }
+        medicalReportRepository.deleteAll(reports);
+
+        // 2. Delete Allergies
+        List<PatientAllergy> allergies = patientAllergyRepository.findByPatientId(userId);
+        patientAllergyRepository.deleteAll(allergies);
+
+        // 3. Delete Patient Profile
+        patientRepository.delete(patient);
+    }
+
     private PatientProfileResponse mapToPatientProfileResponse(Patient patient) {
         return PatientProfileResponse.builder()
                 .id(patient.getId())

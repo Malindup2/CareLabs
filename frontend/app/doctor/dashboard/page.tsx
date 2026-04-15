@@ -387,7 +387,7 @@ export default function DoctorDashboardPage() {
     const currentMonth = now.getMonth();
     
     const weeklyGroups = Array.from({ length: 5 }, () => [] as Appointment[]);
-    appointments.forEach((a) => {
+    completedAppointments.forEach((a) => {
       const d = new Date(a.appointmentTime);
       if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
         const day = d.getDate();
@@ -400,9 +400,9 @@ export default function DoctorDashboardPage() {
       { label: "Week 1", value: weeklyGroups[0].reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
       { label: "Week 2", value: weeklyGroups[1].reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
       { label: "Week 3", value: weeklyGroups[2].reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
-      { label: "Week 4", value: (weeklyGroups[3].concat(weeklyGroups[4])).reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
+      { label: "Week 4+", value: (weeklyGroups[3].concat(weeklyGroups[4])).reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
     ];
-  }, [appointments]);
+  }, [completedAppointments]);
 
   const maxWeeklyRevenue = Math.max(...weeklyRevenue.map(w => w.value), 1000);
 
@@ -1364,16 +1364,16 @@ export default function DoctorDashboardPage() {
                      </div>
                      <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-2xl border border-slate-100">
                         <span className="h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] animate-pulse" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Real-time Vault</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Vault: {formatLkr(earnings.gross)}</span>
                      </div>
                    </div>
                    
-                   <div className="h-64 flex items-end gap-4 px-2 pt-4">
+                   <div className="h-64 flex items-end gap-4 px-2 pt-10">
                      {weeklyRevenue.map((w) => {
-                       const h = Math.max(12, Math.round((w.value / maxWeeklyRevenue) * 100));
+                       const h = Math.max(8, Math.round((w.value / maxWeeklyRevenue) * 100));
                        return (
-                         <div key={w.label} className="flex-1 flex flex-col items-center group/bar">
-                           <div className="w-full relative">
+                         <div key={w.label} className="flex-1 h-full flex flex-col items-center group/bar">
+                           <div className="w-full h-full relative flex items-end">
                              <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover/bar:opacity-100 transition-all scale-75 group-hover/bar:scale-100 whitespace-nowrap z-10 shadow-xl">
                                {formatLkr(w.value)}
                              </div>

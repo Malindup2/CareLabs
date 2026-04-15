@@ -126,4 +126,10 @@ public class PatientController {
     public List<PatientProfileResponse> getAllPatients() {
         return patientService.getAllPatients();
     }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @DeleteMapping("/admin/{id}")
+    public void deletePatientForAdmin(@PathVariable UUID id) {
+        patientService.deletePatient(id);
+    }
 }

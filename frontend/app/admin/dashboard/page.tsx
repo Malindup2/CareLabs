@@ -13,7 +13,7 @@ import {
   Video
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
-import { apiGetAuth, apiPutAuth, apiPostAuth, clearAuth, getRole, getToken } from "@/lib/api";
+import { apiGetAuth, apiPutAuth, apiPostAuth, apiDeleteAuth, clearAuth, getRole, getToken } from "@/lib/api";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -90,6 +90,11 @@ export default function AdminCommandCenter() {
   // Identity Audit State
   const [auditUser, setAuditUser] = useState<{ type: 'doctor' | 'patient', data: any } | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // Deletion State
+  const [userToDelete, setUserToDelete] = useState<{ type: 'doctor' | 'patient', data: any } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter States for Ledger
   const [appSearch, setAppSearch] = useState("");
@@ -233,6 +238,32 @@ export default function AdminCommandCenter() {
       toast.error(err.message || "Broadcast failed.");
     } finally {
       setSendingBroadcast(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!token || !userToDelete) return;
+    setIsDeleting(true);
+    const loadingToast = toast.loading(`Permanently removing ${userToDelete.type}...`);
+    
+    try {
+      // 1. Delete from Profile Service
+      const profileEndpoint = userToDelete.type === 'doctor' 
+        ? `/doctors/admin/${userToDelete.data.id}` 
+        : `/patients/admin/${userToDelete.data.id}`;
+      await apiDeleteAuth(profileEndpoint, token);
+      
+      // 2. Delete from Auth Service
+      await apiDeleteAuth(`/auth/admin/users/${userToDelete.data.userId}`, token);
+      
+      toast.success(`${userToDelete.type === 'doctor' ? 'Doctor' : 'Patient'} identity purged successfully.`, { id: loadingToast });
+      loadAllData(token);
+    } catch (err: any) {
+      toast.error(err.message || "Removal failure. Identity lifecycle intact.", { id: loadingToast });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setUserToDelete(null);
     }
   };
 
@@ -549,12 +580,20 @@ export default function AdminCommandCenter() {
                         items={doctors} 
                         type="doctor" 
                         onViewDetail={(d) => setAuditUser({ type: 'doctor', data: d })}
+                        onDelete={(d) => {
+                          setUserToDelete({ type: 'doctor', data: d });
+                          setShowDeleteConfirm(true);
+                        }}
                      />
                      <UserDirectory 
                         title="Registered Patient Base" 
                         items={patients} 
                         type="patient" 
                         onViewDetail={(p) => setAuditUser({ type: 'patient', data: p })}
+                        onDelete={(p) => {
+                          setUserToDelete({ type: 'patient', data: p });
+                          setShowDeleteConfirm(true);
+                        }}
                      />
                   </div>
                </div>
@@ -614,6 +653,17 @@ export default function AdminCommandCenter() {
       </main>
 
       <ConfirmDialog
+        open={showDeleteConfirm}
+        title={`Purge ${userToDelete?.type === 'doctor' ? 'Doctor' : 'Patient'} Identity`}
+        message={`Are you sure you want to permanently remove ${userToDelete?.data.fullName || userToDelete?.data.id.slice(0,8)} from the system? This will delete all clinical records, medical history, and authentication access. This action is IRREVERSIBLE.`}
+        confirmLabel={isDeleting ? "Processing..." : "Purge Identity"}
+        cancelLabel="Abort"
+        onCancel={() => !isDeleting && setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteUser}
+        danger
+      />
+
+      <ConfirmDialog
         open={showLogoutConfirm}
         title="Confirm Logout"
         message="Are you sure you want to logout?"
@@ -668,7 +718,7 @@ function StatusPill({ status }: { status: string }) {
   return (<span className={`px-2.5 py-1 rounded-full border text-[9px] font-black tracking-[0.15em] uppercase shadow-sm ${styles[status] || 'bg-slate-50 border-slate-100'}`}>{status}</span>);
 }
 
-function UserDirectory({ title, items, type, onViewDetail }: { title: string, items: any[], type: 'doctor' | 'patient', onViewDetail: (user: any) => void }) {
+function UserDirectory({ title, items, type, onViewDetail, onDelete }: { title: string, items: any[], type: 'doctor' | 'patient', onViewDetail: (user: any) => void, onDelete: (user: any) => void }) {
   const [search, setSearch] = useState("");
   
   const filtered = items.filter(u => {
@@ -707,12 +757,20 @@ function UserDirectory({ title, items, type, onViewDetail }: { title: string, it
                   <p className="font-black text-slate-900 text-base leading-tight truncate tracking-tight">{user.fullName || 'Unidentified'}</p>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate mt-1 italic">{type === 'doctor' ? user.specialty : (user.city || 'Geolocation Pending')}</p>
                </div>
-               <button 
-                  onClick={() => onViewDetail(user)}
-                  className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-300 hover:text-blue-600 hover:border-blue-100 hover:shadow-md transition-all active:scale-95 shrink-0"
-               >
-                  <Eye className="w-5 h-5" />
-               </button>
+               <div className="flex items-center gap-2">
+                  <button 
+                     onClick={() => onViewDetail(user)}
+                     className="w-11 h-11 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-300 hover:text-blue-600 hover:border-blue-100 hover:shadow-md transition-all active:scale-95 shrink-0"
+                  >
+                     <Eye className="w-5 h-5" />
+                  </button>
+                  <button 
+                     onClick={() => onDelete(user)}
+                     className="w-11 h-11 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-300 hover:text-rose-600 hover:border-rose-100 hover:shadow-md transition-all active:scale-95 shrink-0"
+                  >
+                     <ShieldX className="w-5 h-5" />
+                  </button>
+               </div>
             </div>
           ))}
           {filtered.length === 0 && (<div className="py-32 flex flex-col items-center justify-center text-center opacity-30 grayscale"><Users2 className="w-16 h-16 mb-4" /><p className="text-[11px] font-black uppercase tracking-widest">No matching identities found</p></div>)}

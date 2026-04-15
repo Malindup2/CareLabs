@@ -164,4 +164,11 @@ public class DoctorController {
             @RequestParam(required = false) String rejectionReason) {
         return ResponseEntity.ok(doctorService.verifyDoctor(id, status, adminUserId, rejectionReason));
     }
+
+    @DeleteMapping("/admin/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteDoctorForAdmin(@PathVariable UUID id) {
+        doctorService.deleteDoctor(id);
+        return ResponseEntity.noContent().build();
+    }
 }
