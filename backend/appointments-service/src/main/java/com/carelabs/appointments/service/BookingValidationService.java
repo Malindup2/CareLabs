@@ -87,4 +87,16 @@ public class BookingValidationService {
         }
         return "Unknown Patient";
     }
+
+    public String getDoctorFullName(UUID doctorId) {
+        try {
+            Map<?, ?> body = restTemplate.getForObject(doctorServiceBaseUrl + "/doctors/" + doctorId, Map.class);
+            if (body != null && body.get("fullName") != null) {
+                return String.valueOf(body.get("fullName"));
+            }
+        } catch (Exception e) {
+            // Named lookup failed - fallback to Doctor
+        }
+        return "Doctor";
+    }
 }

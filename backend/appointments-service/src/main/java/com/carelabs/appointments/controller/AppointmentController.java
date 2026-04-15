@@ -37,7 +37,7 @@ public class AppointmentController {
     //View patient history
     @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @GetMapping("/patient/{patientId}")
-    public ResponseEntity<List<Appointment>> getPatientAppointments(@PathVariable UUID patientId,
+    public ResponseEntity<List<AppointmentResponse>> getPatientAppointments(@PathVariable UUID patientId,
                                                                     Authentication authentication) {
         ensurePatientOwnsRequestedPatientId(patientId, authentication);
         return ResponseEntity.ok(appointmentService.getAppointmentsByPatient(patientId));

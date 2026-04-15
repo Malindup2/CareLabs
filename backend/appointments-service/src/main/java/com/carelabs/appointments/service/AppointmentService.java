@@ -98,8 +98,10 @@ public class AppointmentService {
         return savedAppointment;
     }
 
-    public List<Appointment> getAppointmentsByPatient(UUID patientId) {
-        return appointmentRepository.findByPatientId(patientId);
+    public List<AppointmentResponse> getAppointmentsByPatient(UUID patientId) {
+        return appointmentRepository.findByPatientId(patientId).stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
     public List<AppointmentResponse> getAppointmentsByDoctor(UUID doctorId) {
@@ -115,6 +117,7 @@ public class AppointmentService {
                 .patientId(a.getPatientId())
                 .patientFullName(bookingValidationService.getPatientFullName(a.getPatientId()))
                 .doctorId(a.getDoctorId())
+                .doctorFullName(bookingValidationService.getDoctorFullName(a.getDoctorId()))
                 .appointmentTime(a.getAppointmentTime())
                 .durationMinutes(a.getDurationMinutes())
                 .status(a.getStatus())

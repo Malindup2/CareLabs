@@ -2103,7 +2103,7 @@ export default function DoctorDashboardPage() {
       <ConfirmDialog
         open={showLogoutConfirm}
         title="Confirm Logout"
-        message="Are you sure you want to logout?"
+        message="Are you sure you want to logout? Your secure session will be terminated."
         cancelLabel="Cancel"
         confirmLabel="Yes, Logout"
         onCancel={() => setShowLogoutConfirm(false)}

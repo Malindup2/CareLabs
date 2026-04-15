@@ -38,7 +38,6 @@ export default function PatientDashboardPage() {
   const [patient, setPatient] = useState<PatientProfile | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [now, setNow] = useState(new Date());
   const token = getToken();
 
@@ -269,19 +268,6 @@ export default function PatientDashboardPage() {
         </div>
       </div>
 
-      <ConfirmDialog
-        open={showLogoutConfirm}
-        title="Confirm Logout"
-        message="Are you sure you want to logout? Your secure session will be terminated."
-        cancelLabel="Cancel"
-        confirmLabel="Yes, Terminate Session"
-        onCancel={() => setShowLogoutConfirm(false)}
-        onConfirm={() => {
-          setShowLogoutConfirm(false);
-          clearAuth();
-          router.replace("/login");
-        }}
-      />
     </div>
   );
 }

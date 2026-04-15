@@ -6,6 +6,8 @@ import PatientSidebar from "@/components/PatientSidebar";
 import FloatingChatbot from "@/components/FloatingChatbot";
 import { apiGetAuth, clearAuth, getToken } from "@/lib/api";
 import NotificationBell from "@/components/NotificationBell";
+import ConfirmDialog from "@/components/ConfirmDialog";
+
 
 const routeTitles: Record<string, string> = {
   "/patient/dashboard": "Dashboard",
@@ -21,6 +23,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const [now, setNow] = useState(new Date());
   const [patientName, setPatientName] = useState<string | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const token = getToken();
 
   useEffect(() => {
@@ -61,9 +64,9 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">PT</div>
             <NotificationBell />
-            <button
+             <button
               type="button"
-              onClick={() => { clearAuth(); window.location.href = "/login"; }}
+              onClick={() => setShowLogoutConfirm(true)}
               className="rounded-2xl border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition"
             >
               Logout
@@ -73,6 +76,20 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
         <main className="flex-1 overflow-auto px-6 py-6 md:px-8 md:py-8">{children}</main>
       </div>
       <FloatingChatbot />
+
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        title="Confirm Logout"
+        message="Are you sure you want to logout? Your secure session will be terminated."
+        cancelLabel="Cancel"
+        confirmLabel="Yes, Terminate Session"
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          clearAuth();
+          window.location.href = "/login";
+        }}
+      />
     </div>
   );
 }

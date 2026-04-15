@@ -26,5 +26,6 @@ public class AppointmentResponse {
     private AppointmentType type;
     private String reason;
     private BigDecimal consultationFee;
+    private String doctorFullName;
     private String meetingLink;
 }
