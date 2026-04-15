@@ -263,13 +263,15 @@ export default function DoctorDashboardPage() {
   }, [appointments]);
 
   const filteredAppointments = useMemo(() => {
-    return appointments.filter((a) => {
-      const matchesSearch =
-        (a.patientFullName || "").toLowerCase().includes(appointmentSearch.toLowerCase()) ||
-        a.id?.toLowerCase().includes(appointmentSearch.toLowerCase());
-      const matchesStatus = appointmentFilterStatus === "ALL" || a.status === appointmentFilterStatus;
-      return matchesSearch && matchesStatus;
-    });
+    return appointments
+      .filter((a) => {
+        const matchesSearch =
+          (a.patientFullName || "").toLowerCase().includes(appointmentSearch.toLowerCase()) ||
+          a.id?.toLowerCase().includes(appointmentSearch.toLowerCase());
+        const matchesStatus = appointmentFilterStatus === "ALL" || a.status === appointmentFilterStatus;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => new Date(b.appointmentTime).getTime() - new Date(a.appointmentTime).getTime());
   }, [appointments, appointmentSearch, appointmentFilterStatus]);
   const completedAppointments = useMemo(() => appointments.filter((a) => a.status === "COMPLETED"), [appointments]);
 

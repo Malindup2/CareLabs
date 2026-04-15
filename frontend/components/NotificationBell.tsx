@@ -150,7 +150,8 @@ export default function NotificationBell() {
                 {notifications.map((n) => (
                   <div 
                     key={n.id} 
-                    className={`p-4 hover:bg-slate-50 transition-colors group relative ${!n.read ? 'bg-blue-50/30' : ''}`}
+                    onClick={(e) => !n.read && handleMarkAsRead(n.id, e)}
+                    className={`p-4 hover:bg-slate-50 transition-colors group relative cursor-pointer ${!n.read ? 'bg-blue-50/30' : ''}`}
                   >
                     <div className="flex gap-3">
                       <div className="mt-1 h-8 w-8 rounded-full bg-white border border-slate-100 flex items-center justify-center shrink-0 shadow-sm">

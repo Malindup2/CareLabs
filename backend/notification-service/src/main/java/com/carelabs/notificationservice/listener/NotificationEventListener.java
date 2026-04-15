@@ -10,12 +10,14 @@ import com.carelabs.notificationservice.enums.NotificationEvent;
 import com.carelabs.notificationservice.service.AppointmentLookupService;
 import com.carelabs.notificationservice.service.NotificationService;
 import com.carelabs.notificationservice.service.UserLookupService;
+import com.carelabs.notificationservice.service.DoctorLookupService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.UUID;
 import java.util.Map;
 
 @Component
@@ -26,16 +28,27 @@ public class NotificationEventListener {
     private final NotificationService notificationService;
     private final UserLookupService userLookupService;
     private final AppointmentLookupService appointmentLookupService;
+    private final DoctorLookupService doctorLookupService;
 
     @KafkaListener(topics = "appointment-events", groupId = "notification-group-v2")
     public void handleAppointmentBooked(AppointmentBookedEvent event) {
         log.info("Received appointment-events: appointmentId={}", event.getAppointmentId());
 
         UserEmailDto patient = userLookupService.getUserById(event.getPatientId());
-        UserEmailDto doctor = userLookupService.getUserById(event.getDoctorId());
+        
+        // Resolve Doctor UserId from DoctorId
+        UUID doctorUserId = event.getDoctorId();
+        var doctorProfile = doctorLookupService.getDoctorById(event.getDoctorId());
+        if (doctorProfile != null && doctorProfile.getUserId() != null) {
+            doctorUserId = doctorProfile.getUserId();
+        }
+
+        UserEmailDto doctor = userLookupService.getUserById(doctorUserId);
 
         String patientName = patient != null ? patient.getFullName() : "Patient";
-        String doctorName = doctor != null ? doctor.getFullName() : "Doctor";
+        String doctorName = (doctorProfile != null && doctorProfile.getFullName() != null) 
+                ? doctorProfile.getFullName() 
+                : (doctor != null ? doctor.getFullName() : "Doctor");
         String timeStr = event.getAppointmentTime().toString();
 
         // 1. Notify Doctor
@@ -44,7 +57,7 @@ public class NotificationEventListener {
         doctorData.put("appointmentTime", timeStr);
         
         notificationService.processNotification(NotificationRequest.builder()
-                .targetUserId(event.getDoctorId())
+                .targetUserId(doctorUserId)
                 .appointmentId(event.getAppointmentId())
                 .event(NotificationEvent.APPOINTMENT_BOOKED)
                 .extraData(doctorData)
@@ -71,10 +84,21 @@ public class NotificationEventListener {
         if (appointment == null) return;
 
         UserEmailDto patient = userLookupService.getUserById(appointment.getPatientId());
-        UserEmailDto doctor = userLookupService.getUserById(appointment.getDoctorId());
+        
+        // Resolve Doctor profile first for the name
+        var doctorProfile = doctorLookupService.getDoctorById(appointment.getDoctorId());
+        UserEmailDto doctor = null;
+        UUID doctorUserId = appointment.getDoctorId();
+        
+        if (doctorProfile != null && doctorProfile.getUserId() != null) {
+            doctorUserId = doctorProfile.getUserId();
+            doctor = userLookupService.getUserById(doctorUserId);
+        }
 
         Map<String, String> data = new HashMap<>();
-        data.put("doctorName", doctor != null ? doctor.getFullName() : "Doctor");
+        data.put("doctorName", (doctorProfile != null && doctorProfile.getFullName() != null) 
+                ? doctorProfile.getFullName() 
+                : (doctor != null ? doctor.getFullName() : "Doctor"));
         data.put("patientName", patient != null ? patient.getFullName() : "Patient");
         data.put("appointmentTime", appointment.getAppointmentTime().toString());
 
@@ -87,9 +111,9 @@ public class NotificationEventListener {
                     .extraData(data)
                     .build());
 
-            // Notify Doctor
+            // Notify Doctor (UserId already resolved above)
             notificationService.processNotification(NotificationRequest.builder()
-                    .targetUserId(appointment.getDoctorId())
+                    .targetUserId(doctorUserId)
                     .appointmentId(appointment.getId())
                     .event(NotificationEvent.PAYMENT_SUCCESS)
                     .extraData(data)

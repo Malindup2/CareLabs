@@ -21,6 +21,11 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
 
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String userId = request.getHeader("X-Auth-User-Id");
         String role = request.getHeader("X-Auth-Role");
 
