@@ -729,33 +729,9 @@ export default function DoctorDashboardPage() {
     }
   };
 
-  const handleFetchMeetingLink = async () => {
-    if (!token || !selectedAppointmentId || !selectedAppointment) {
-      toast.error("Select a telemedicine appointment first.");
-      return;
-    }
-
-    if (selectedAppointment.type !== "TELEMEDICINE") {
-      toast.error("Meeting link is available only for telemedicine appointments.");
-      return;
-    }
-
-    try {
-      setMeetingLoading(true);
-      const data = await apiGetAuth<{ meetingUrl: string }>(`/appointments/${selectedAppointmentId}/meeting-link`, token);
-      setMeetingLink(data.meetingUrl);
-      setShowJitsiPreview(false);
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      toast.error(e.message || "Unable to fetch meeting link");
-    } finally {
-      setMeetingLoading(false);
-    }
-  };
-
-  const handleStartJitsiCall = async () => {
-    if (!token || !selectedAppointmentId || !selectedAppointment) {
-      toast.error("Select a telemedicine appointment first.");
+  const handleJoinMeeting = async (appointment: Appointment) => {
+    if (!token) {
+      toast.error("Authentication required.");
       return;
     }
 
@@ -764,29 +740,47 @@ export default function DoctorDashboardPage() {
       return;
     }
 
-    if (selectedAppointment.status !== "CONFIRMED" && selectedAppointment.status !== "ACCEPTED") {
+    if (appointment.type !== "TELEMEDICINE") {
+      toast.error("Meeting link is available only for telemedicine appointments.");
+      return;
+    }
+
+    if (appointment.status !== "CONFIRMED" && appointment.status !== "ACCEPTED") {
       toast.error("Meeting can start only after payment is confirmed.");
       return;
     }
 
-    if (!meetingLink) {
-      toast.error("Load the Jitsi link first.");
-      return;
-    }
-
     try {
-      if (selectedAppointment.status !== "ACCEPTED") {
-        await apiPutAuth<Appointment>(`/appointments/${selectedAppointmentId}/status?status=ACCEPTED`, {}, token);
+      setMeetingLoading(true);
+      setSelectedAppointmentId(appointment.id);
+
+      // Step 1: Fetch the meeting link
+      const data = await apiGetAuth<{ meetingUrl: string }>(`/appointments/${appointment.id}/meeting-link`, token);
+      const url = data.meetingUrl;
+
+      if (!url) {
+        toast.error("No meeting URL returned from the server.");
+        return;
+      }
+
+      setMeetingLink(url);
+
+      // Step 2: Update status to ACCEPTED if not already
+      if (appointment.status !== "ACCEPTED") {
+        await apiPutAuth<Appointment>(`/appointments/${appointment.id}/status?status=ACCEPTED`, {}, token);
         await refreshAppointments();
       }
 
+      // Step 3: Open the meeting
       if (typeof window !== "undefined") {
-        window.alert("Before joining, make sure your microphone and camera are turned on.");
-        window.open(meetingLink, "_blank", "noopener,noreferrer");
+        window.open(url, "_blank", "noopener,noreferrer");
+        toast.success("Meeting opened in a new tab.");
       }
     } catch (err: unknown) {
       const e = err as { message?: string };
-      toast.error(e.message || "Unable to mark meeting as started");
+      toast.error(e.message || "Unable to start meeting");
+    } finally {
+      setMeetingLoading(false);
     }
   };
 
@@ -1020,8 +1014,15 @@ export default function DoctorDashboardPage() {
     <div className="flex h-screen overflow-hidden bg-slate-50" suppressHydrationWarning>
       <aside className="w-64 bg-slate-900 border-r border-slate-800 flex-col hidden md:flex shrink-0" suppressHydrationWarning>
         <div className="p-6 border-b border-slate-800">
-           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-             <Stethoscope className="w-6 h-6 text-blue-500" /> CareLabs
+           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
+              <div className="h-10 w-10 overflow-hidden rounded-xl flex items-center justify-center">
+                <img
+                 src="/images/carelabs.png"
+                 alt="CareLabs Logo"
+                 className="w-full h-full object-contain"
+                />
+             </div>
+             CareLabs
            </h1>
         </div>
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
@@ -1869,17 +1870,29 @@ export default function DoctorDashboardPage() {
                                   </td>
                                   <td className="px-8 py-6">
                                      <div className="flex items-center justify-end gap-2">
-                                        {a.type === "TELEMEDICINE" && (a.status === "CONFIRMED" || a.status === "ACCEPTED") && (
-                                          <button 
-                                            onClick={() => {
-                                              setSelectedAppointmentId(a.id);
-                                              void handleFetchMeetingLink();
-                                            }}
-                                            className="px-4 py-2 rounded-xl bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95 shadow-lg shadow-blue-500/20"
-                                          >
-                                            Join Meeting
-                                          </button>
-                                        )}
+                                        {a.type === "TELEMEDICINE" && (() => {
+                                           const canJoin = a.status === "CONFIRMED" || a.status === "ACCEPTED";
+                                           const isThisLoading = meetingLoading && selectedAppointmentId === a.id;
+                                           const isOtherLoading = meetingLoading && selectedAppointmentId !== a.id;
+                                           const isDisabled = !canJoin || meetingLoading;
+                                           return (
+                                             <button 
+                                               onClick={() => handleJoinMeeting(a)}
+                                               disabled={isDisabled}
+                                               className={`px-4 py-2 rounded-xl text-white text-[9px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 ${
+                                                 !canJoin
+                                                   ? "bg-slate-300 cursor-not-allowed opacity-40"
+                                                   : isOtherLoading
+                                                     ? "bg-slate-300 cursor-not-allowed opacity-50"
+                                                     : isThisLoading
+                                                       ? "bg-blue-500 opacity-80"
+                                                       : "bg-blue-600 hover:bg-blue-700 active:scale-95"
+                                               }`}
+                                             >
+                                               {isThisLoading ? "Connecting..." : "Join Meeting"}
+                                             </button>
+                                           );
+                                        })()}
                                         <button 
                                           onClick={() => openNoteModal(a.id)}
                                           disabled={!canConsult}
