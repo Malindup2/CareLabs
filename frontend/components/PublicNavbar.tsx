@@ -1,16 +1,50 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Activity } from "lucide-react";
+import { clearAuth, getRole, getToken } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import NotificationBell from "./NotificationBell";
 
 export default function PublicNavbar() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const syncAuth = () => {
+      const token = getToken();
+      const nextRole = getRole();
+      setIsAuthenticated(Boolean(token));
+      setRole(nextRole);
+    };
+
+    syncAuth();
+    window.addEventListener("storage", syncAuth);
+    return () => window.removeEventListener("storage", syncAuth);
+  }, []);
+
+  const handleLogout = () => {
+    clearAuth();
+    setIsAuthenticated(false);
+    setRole(null);
+    router.push("/");
+  };
+
   return (
-    <nav className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.02)] transition-all duration-300">
+    <nav suppressHydrationWarning className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.02)] transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
           
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="p-2 bg-gradient-to-tr from-primary to-blue-500 rounded-xl shadow-[0_4px_14px_0_rgba(37,99,235,0.25)] group-hover:scale-105 transition-transform duration-300 ease-out">
-              <Activity className="w-5 h-5 text-white" />
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative h-10 w-10 overflow-hidden rounded-xl group-hover:scale-105 transition-transform duration-300">
+               <img
+                src="/images/carelabs.png"
+                alt="CareLabs Logo"
+                className="w-full h-full object-contain"
+               />
             </div>
             <span className="text-2xl font-bold tracking-tight text-slate-900 group-hover:opacity-80 transition-opacity">CareLabs</span>
           </Link>
@@ -30,19 +64,43 @@ export default function PublicNavbar() {
 
           {/* Auth Actions */}
           <div className="hidden md:flex items-center gap-4">
-            <Link 
-              href="/login" 
-              className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-2 transition-colors"
-            >
-              Sign In
-            </Link>
-            <Link 
-              href="/register" 
-              className="relative inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all duration-300 hover:scale-[1.02] shadow-[0_4px_14px_0_rgba(15,23,42,0.15)] overflow-hidden group"
-            >
-              <span className="absolute inset-0 w-full h-full -right-[100%] bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:animate-shimmer"></span>
-              Get Started
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                  {role || "User"}
+                </span>
+                <Link
+                  href={role === "DOCTOR" ? "/doctor/dashboard" : role === "PATIENT" ? "/patient/dashboard" : "/admin/dashboard"}
+                  className="text-sm font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-all"
+                >
+                  Dashboard
+                </Link>
+                <NotificationBell />
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="relative inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all duration-300 hover:scale-[1.02] shadow-[0_4px_14px_0_rgba(15,23,42,0.15)]"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-2 transition-colors"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/register"
+                  className="relative inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition-all duration-300 hover:scale-[1.02] shadow-[0_4px_14px_0_rgba(15,23,42,0.15)] overflow-hidden group"
+                >
+                  <span className="absolute inset-0 w-full h-full -right-[100%] bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:animate-shimmer"></span>
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
 
         </div>

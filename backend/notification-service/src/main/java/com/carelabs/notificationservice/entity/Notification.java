@@ -3,19 +3,12 @@ package com.carelabs.notificationservice.entity;
 import com.carelabs.notificationservice.enums.NotificationEvent;
 import com.carelabs.notificationservice.enums.NotificationStatus;
 import com.carelabs.notificationservice.enums.NotificationType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "notifications")
@@ -23,14 +16,19 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Notification {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    /** The user (patient, doctor, or admin) this notification belongs to */
     @Column(nullable = false)
     private UUID userId;
+
+    /** The appointment this notification relates to (nullable for non-appointment events) */
+    private UUID appointmentId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -43,12 +41,20 @@ public class Notification {
     @Column(nullable = false)
     private String title;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 
+    /** Recipient email address (stored for audit trail) */
+    private String recipientEmail;
+
+    @Builder.Default
     private Boolean read = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private NotificationStatus status;
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
 }

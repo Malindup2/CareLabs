@@ -5,19 +5,16 @@ import com.carelabs.patientservice.dto.MedicalHistoryResponse;
 import com.carelabs.patientservice.dto.MedicalReportResponse;
 import com.carelabs.patientservice.dto.PatientAllergyResponse;
 import com.carelabs.patientservice.dto.PatientProfileResponse;
-import com.carelabs.patientservice.dto.SymptomCheckResponse;
 import com.carelabs.patientservice.dto.UpdatePatientAllergyRequest;
 import com.carelabs.patientservice.dto.UpdatePatientProfileRequest;
 import com.carelabs.patientservice.entity.MedicalReport;
 import com.carelabs.patientservice.entity.Patient;
 import com.carelabs.patientservice.entity.PatientAllergy;
-import com.carelabs.patientservice.entity.SymptomCheck;
 import com.carelabs.patientservice.enums.ReportType;
 import com.carelabs.patientservice.exception.ResourceNotFoundException;
 import com.carelabs.patientservice.repository.MedicalReportRepository;
 import com.carelabs.patientservice.repository.PatientAllergyRepository;
 import com.carelabs.patientservice.repository.PatientRepository;
-import com.carelabs.patientservice.repository.SymptomCheckRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -32,18 +29,15 @@ public class PatientService {
     private final PatientRepository patientRepository;
     private final MedicalReportRepository medicalReportRepository;
     private final PatientAllergyRepository patientAllergyRepository;
-    private final SymptomCheckRepository symptomCheckRepository;
     private final CloudinaryService cloudinaryService;
 
     public PatientService(PatientRepository patientRepository,
                           MedicalReportRepository medicalReportRepository,
                           PatientAllergyRepository patientAllergyRepository,
-                          SymptomCheckRepository symptomCheckRepository,
                           CloudinaryService cloudinaryService) {
         this.patientRepository = patientRepository;
         this.medicalReportRepository = medicalReportRepository;
         this.patientAllergyRepository = patientAllergyRepository;
-        this.symptomCheckRepository = symptomCheckRepository;
         this.cloudinaryService = cloudinaryService;
     }
 
@@ -203,17 +197,46 @@ public class PatientService {
                 .map(this::mapToMedicalReportResponse)
                 .toList();
 
-        List<SymptomCheckResponse> symptomChecks = symptomCheckRepository.findByPatientId(userId)
-                .stream()
-                .map(this::mapToSymptomCheckResponse)
-                .toList();
+
 
         return MedicalHistoryResponse.builder()
                 .profile(mapToPatientProfileResponse(patient))
                 .allergies(allergies)
                 .reports(reports)
-                .symptomChecks(symptomChecks)
                 .build();
+    }
+
+    public List<PatientProfileResponse> getAllPatients() {
+        return patientRepository.findAll().stream()
+                .map(this::mapToPatientProfileResponse)
+                .toList();
+    }
+
+    public void deletePatient(UUID id) {
+        Patient patient = patientRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+        
+        UUID userId = patient.getUserId();
+
+        // 1. Delete Medical Reports (including Cloudinary)
+        List<com.carelabs.patientservice.entity.MedicalReport> reports = medicalReportRepository.findByPatientId(userId);
+        for (com.carelabs.patientservice.entity.MedicalReport report : reports) {
+            try {
+                if (report.getPublicId() != null) {
+                    cloudinaryService.deleteFile(report.getPublicId());
+                }
+            } catch (Exception e) {
+                // Ignore Cloudinary errors but log if possible
+            }
+        }
+        medicalReportRepository.deleteAll(reports);
+
+        // 2. Delete Allergies
+        List<PatientAllergy> allergies = patientAllergyRepository.findByPatientId(userId);
+        patientAllergyRepository.deleteAll(allergies);
+
+        // 3. Delete Patient Profile
+        patientRepository.delete(patient);
     }
 
     private PatientProfileResponse mapToPatientProfileResponse(Patient patient) {
@@ -252,13 +275,4 @@ public class PatientService {
                 .build();
     }
 
-    private SymptomCheckResponse mapToSymptomCheckResponse(SymptomCheck symptomCheck) {
-        return SymptomCheckResponse.builder()
-                .id(symptomCheck.getId())
-                .symptoms(symptomCheck.getSymptoms())
-                .result(symptomCheck.getResult())
-                .recommendedSpecialty(symptomCheck.getRecommendedSpecialty())
-                .confidenceScore(symptomCheck.getConfidenceScore())
-                .build();
-    }
 }

@@ -15,5 +15,5 @@ public class MedicalHistoryResponse {
     private PatientProfileResponse profile;
     private List<PatientAllergyResponse> allergies;
     private List<MedicalReportResponse> reports;
-    private List<SymptomCheckResponse> symptomChecks;
+    
 }

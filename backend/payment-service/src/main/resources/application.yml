@@ -1,0 +1,46 @@
+server:
+  port: ${SERVER_PORT:8085}
+
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/carelabs_payments
+    username: postgres
+    password: 12345 # Assuming this is your local Docker password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.carelabs.*"
+
+pricing:
+  consultation:
+    default-fee: 1500.00
+  platform-fee-ratio: 0.10
+
+integration:
+  appointments-service:
+    base-url: ${APPOINTMENTS_SERVICE_BASE_URL:http://localhost:8084}
+
+app:
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+
+# Custom PayHere Configuration
+payhere:
+  sandbox: true
+  merchant-id: 1234826
+  merchant-secret: MzIzODQ4OTExNzE3ODgzMzQ0NTA5MjU5NjI1NTYzMDQ5NDgyMDc1
+  currency: LKR
+  notify-url: ${PAYHERE_NOTIFY_URL:https://timid-obligate-erasure.ngrok-free.dev/payments/notify}

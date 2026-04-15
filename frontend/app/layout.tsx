@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
+import FloatingChatbot from "@/components/FloatingChatbot";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CareLabs",
   description: "Next Generation Healthcare Platform",
+  icons: {
+    icon: "/images/carelabs.png",
+  },
 };
 
 export default function RootLayout({
@@ -24,11 +28,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased font-[family-name:var(--font-geist-sans)]`}
+        suppressHydrationWarning
       >
         {children}
+        {/* Floating AI Symptom Checker Chatbot */}
+        <FloatingChatbot />
         <Toaster position="top-right" toastOptions={{
           style: {
             background: '#0F172A',

@@ -6,7 +6,9 @@
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.3-brightgreen)](#)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](#)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-blue)](#)
+[![Status](https://img.shields.io/badge/Status-95%25_Completed-success)](#)
 [![License](https://img.shields.io/badge/License-Academic-lightgrey)](#license)
+
 
 ---
 

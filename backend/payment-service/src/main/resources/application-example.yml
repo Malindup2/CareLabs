@@ -4,7 +4,7 @@
 # Copy this file to application.yml and update values as needed.
 
 server:
-  port: 8087
+  port: 8085
 
 spring:
   application:
@@ -24,12 +24,24 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+pricing:
+  consultation:
+    default-fee: 1500.00
+  platform-fee-ratio: 0.10
+
+integration:
+  appointments-service:
+    base-url: ${APPOINTMENTS_SERVICE_BASE_URL:http://localhost:8084}
+
+app:
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+
 # Payment Gateway Configuration (PayHere / Stripe)
 # payhere:
 #   merchant-id: your_merchant_id
 #   merchant-secret: your_merchant_secret
 #   sandbox: true
-#   notify-url: http://localhost:8087/payments/notify
+#   notify-url: ${PAYHERE_NOTIFY_URL:http://localhost:8080/payments/notify}
 
 # stripe:
 #   secret-key: sk_test_your_stripe_secret_key
