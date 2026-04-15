@@ -301,6 +301,10 @@ public class AppointmentService {
                 .orElse(null);
     }
 
+    public List<Prescription> getPrescriptionsByPatient(UUID patientId) {
+        return prescriptionRepository.findByPatientId(patientId);
+    }
+
     public Review saveReview(UUID appointmentId, Review review) {
         getAppointmentById(appointmentId);
         review.setAppointmentId(appointmentId);
