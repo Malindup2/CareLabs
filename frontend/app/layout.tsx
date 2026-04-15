@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
+import FloatingChatbot from "@/components/FloatingChatbot";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,6 +31,8 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         {children}
+        {/* Floating AI Symptom Checker Chatbot */}
+        <FloatingChatbot />
         <Toaster position="top-right" toastOptions={{
           style: {
             background: '#0F172A',

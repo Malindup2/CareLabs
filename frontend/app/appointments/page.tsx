@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   Activity,
@@ -38,6 +38,9 @@ import {
 } from "@/lib/api";
 import { getJitsiRoomName, isJitsiMeetingUrl, toJitsiEmbedUrl } from "@/lib/telemedicine";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import Modal from "@/components/Modal";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const APPOINTMENT_STATUS_OPTIONS = ["PENDING", "CONFIRMED", "ACCEPTED", "REJECTED", "CANCELLED", "COMPLETED", "NO_SHOW"] as const;
 const APPOINTMENT_TYPES = ["IN_CLINIC", "TELEMEDICINE"] as const;
@@ -76,6 +79,8 @@ interface Appointment {
   id: string;
   patientId: string;
   doctorId: string;
+  doctorName?: string | null;
+  doctorFullName?: string | null;
   symptomCheckId?: string | null;
   appointmentTime: string;
   durationMinutes?: number | null;
@@ -251,8 +256,8 @@ export default function AppointmentsHubPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string>("");
   const [showCancelAppointmentConfirm, setShowCancelAppointmentConfirm] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   const [patientProfile, setPatientProfile] = useState<PatientProfile | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
@@ -261,6 +266,7 @@ export default function AppointmentsHubPage() {
   const [doctorPreview, setDoctorPreview] = useState<DoctorProfile | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
 
   const [rescheduleTime, setRescheduleTime] = useState("");
   const [statusToSet, setStatusToSet] = useState<AppointmentStatus>("CONFIRMED");
@@ -277,6 +283,7 @@ export default function AppointmentsHubPage() {
     clinicalNotes: "",
     diagnosis: "",
   });
+  const [selectedNote, setSelectedNote] = useState<ConsultationNote | null>(null);
   const [prescriptionForm, setPrescriptionForm] = useState<Prescription>({
     appointmentId: "",
     doctorId: "",
@@ -293,6 +300,7 @@ export default function AppointmentsHubPage() {
       },
     ],
   });
+  const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [reviewForm, setReviewForm] = useState<Review>({
     appointmentId: "",
     patientId: "",
@@ -307,13 +315,55 @@ export default function AppointmentsHubPage() {
   );
 
   const visibleAppointments = useMemo(() => {
-    return appointments.filter((appointment) => {
-      const matchesStatus = statusFilter === "ALL" || appointment.status === statusFilter;
-      const haystack = `${appointment.id} ${appointment.reason || ""} ${appointment.type} ${appointment.status}`.toLowerCase();
-      const matchesSearch = !searchTerm || haystack.includes(searchTerm.toLowerCase());
-      return matchesStatus && matchesSearch;
-    });
+    return [...appointments]
+      .filter((appointment) => {
+        const searchLower = searchTerm.trim().toLowerCase();
+        const haystack = `${appointment.id} ${appointment.reason || ""} ${appointment.type} ${appointment.status} ${appointment.doctorId} ${appointment.doctorName || ""} ${appointment.doctorFullName || ""}`.toLowerCase();
+        const matchesSearch = !searchLower || haystack.includes(searchLower);
+        const matchesStatus = statusFilter === "ALL" || appointment.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => new Date(a.appointmentTime).getTime() - new Date(b.appointmentTime).getTime());
   }, [appointments, searchTerm, statusFilter]);
+
+  const handleDownloadPDF = () => {
+    if (visibleAppointments.length === 0) {
+      toast.error("No appointment records to export.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.text("CareLabs Appointment Queue", 14, 20);
+
+    doc.setFontSize(10);
+    doc.setTextColor(226, 232, 240);
+    doc.text(`Export Date: ${new Date().toLocaleString()}`, 14, 28);
+    doc.text(`Records: ${visibleAppointments.length}`, 14, 34);
+
+    autoTable(doc, {
+      startY: 42,
+      head: [["ID", "Time", "Type", "Status", "Doctor", "Reason"]],
+      body: visibleAppointments.map((appointment) => [
+        appointment.id.slice(0, 8),
+        new Date(appointment.appointmentTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }),
+        appointment.type,
+        appointment.status,
+        appointment.doctorName || appointment.doctorFullName || appointment.doctorId.slice(0, 8),
+        appointment.reason || "-",
+      ]),
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
+      bodyStyles: { textColor: [15, 23, 42] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      theme: "grid",
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 8, cellPadding: 2 },
+    });
+
+    doc.save(`CareLabs_Appointments_${new Date().toISOString().split("T")[0]}.pdf`);
+    toast.success("Appointment queue PDF downloaded.");
+  };
 
   const appointmentStats = useMemo(() => {
     const total = appointments.length;
@@ -321,19 +371,6 @@ export default function AppointmentsHubPage() {
     const completed = appointments.filter((appointment) => appointment.status === "COMPLETED").length;
     const cancelled = appointments.filter((appointment) => ["CANCELLED", "REJECTED", "NO_SHOW"].includes(appointment.status)).length;
     return { total, upcoming, completed, cancelled };
-  }, [appointments]);
-
-  const patientTimeline = useMemo(() => {
-    return [...appointments]
-      .sort((a, b) => new Date(b.appointmentTime).getTime() - new Date(a.appointmentTime).getTime())
-      .slice(0, 6)
-      .map((appointment) => ({
-        id: appointment.id,
-        status: appointment.status,
-        type: appointment.type,
-        appointmentTime: appointment.appointmentTime,
-        reason: appointment.reason || "No reason provided",
-      }));
   }, [appointments]);
 
   const isJitsiLink = useMemo(() => isJitsiMeetingUrl(meetingLink), [meetingLink]);
@@ -363,6 +400,14 @@ export default function AppointmentsHubPage() {
     setRole(currentRole);
   }, [router]);
 
+  const getNextAppointmentId = (rows: Appointment[]) => {
+    if (rows.length === 0) return "";
+    const sorted = [...rows].sort((a, b) => new Date(a.appointmentTime).getTime() - new Date(b.appointmentTime).getTime());
+    const now = Date.now();
+    const next = sorted.find((appointment) => new Date(appointment.appointmentTime).getTime() >= now);
+    return next?.id || sorted[0]?.id || "";
+  };
+
   useEffect(() => {
     if (!token || !role) return;
 
@@ -374,17 +419,17 @@ export default function AppointmentsHubPage() {
           setPatientProfile(profile);
           const rows = await apiGetAuth<Appointment[]>(`/appointments/patient/${profile.userId}`, token);
           setAppointments(rows);
-          setSelectedAppointmentId(rows[0]?.id || "");
+          setSelectedAppointmentId(getNextAppointmentId(rows));
         } else if (role === "DOCTOR") {
           const profile = await apiGetAuth<DoctorProfile>("/doctors/me", token);
           setDoctorProfile(profile);
           const rows = await apiGetAuth<Appointment[]>(`/appointments/doctor/${profile.id}`, token);
           setAppointments(rows);
-          setSelectedAppointmentId(rows[0]?.id || "");
+          setSelectedAppointmentId(getNextAppointmentId(rows));
         } else {
           const rows = await apiGetAuth<Appointment[]>("/appointments", token);
           setAppointments(rows);
-          setSelectedAppointmentId(rows[0]?.id || "");
+          setSelectedAppointmentId(getNextAppointmentId(rows));
         }
       } catch (err: unknown) {
         const error = err as { message?: string };
@@ -489,16 +534,30 @@ export default function AppointmentsHubPage() {
 
       try {
         const shouldLoadMeeting = selectedAppointment?.type === "TELEMEDICINE";
-        const [link, chat, appointment] = await Promise.all([
+        const [link, chat, appointment, note, prescription] = await Promise.all([
           shouldLoadMeeting
             ? apiGetAuth<{ meetingUrl: string }>(`/appointments/${selectedAppointmentId}/meeting-link`, token).catch(() => null)
             : Promise.resolve(null),
           apiGetAuth<ChatMessage[]>(`/appointments/${selectedAppointmentId}/chat`, token).catch(() => []),
           apiGetAuth<Appointment>(`/appointments/${selectedAppointmentId}`, token).catch(() => null),
+          apiGetAuth<ConsultationNote>(`/appointments/${selectedAppointmentId}/notes`, token).catch(() => null),
+          apiGetAuth<Prescription>(`/appointments/${selectedAppointmentId}/prescriptions`, token).catch(() => null),
         ]);
 
         if (link?.meetingUrl) setMeetingLink(link.meetingUrl);
         if (chat) setChatHistory(chat);
+        if (note) {
+          setSelectedNote(note);
+          setNoteForm(note);
+        } else {
+          setSelectedNote(null);
+        }
+        if (prescription) {
+          setSelectedPrescription(prescription);
+          setPrescriptionForm(prescription);
+        } else {
+          setSelectedPrescription(null);
+        }
         if (appointment?.type) {
           setStatusToSet(appointment.status);
           setRescheduleTime(appointment.appointmentTime.slice(0, 16));
@@ -805,62 +864,56 @@ export default function AppointmentsHubPage() {
     );
   }
 
+  const pathname = usePathname();
   const isPatient = role === "PATIENT";
   const isDoctor = role === "DOCTOR";
   const doctorCanConsult = !isDoctor || (doctorProfile?.verificationStatus === "APPROVED" && doctorProfile?.active);
   const canManage = role === "ADMIN" || (isDoctor && doctorCanConsult);
   const bookingPreview = doctorPreview || null;
+  const patientNameDisplay = isPatient ? (patientProfile?.fullName?.trim() || "Patient") : "Patient";
+  const mainClasses = pathname?.startsWith("/patient") ? "pb-12" : "pt-20 pb-12";
+
+  const canJoinAppointment = (appointment: Appointment) => appointment.type === "TELEMEDICINE" && appointment.status === "ACCEPTED";
+
+  const handleJoinMeetingFromRow = async (appointment: Appointment) => {
+    if (!token || !canJoinAppointment(appointment)) return;
+
+    try {
+      const response = await apiGetAuth<{ meetingUrl: string }>(`/appointments/${appointment.id}/meeting-link`, token);
+      if (!response.meetingUrl) {
+        toast.error("Meeting link not available yet.");
+        return;
+      }
+      window.open(response.meetingUrl, "_blank", "noopener,noreferrer");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      toast.error(error.message || "Unable to open the meeting link.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="pt-20 pb-12">
-        <section className="bg-white border-b border-slate-200/70">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div className="grid lg:grid-cols-12 gap-8 items-start">
-              <div className="lg:col-span-8 space-y-6">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold tracking-[0.18em] uppercase border border-blue-100">
-                  <Activity className="w-4 h-4" /> Appointment Center
-                </div>
-                <div>
-                  <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-slate-900">Appointments</h1>
-                  <p className="mt-3 text-lg text-slate-500 max-w-3xl">
-                    Manage consultations, review the schedule, book a new visit, and keep the chat, notes, and prescriptions tied to the live backend workflow.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <div className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-bold">Role: {role}</div>
-                  <div className="px-4 py-2 rounded-full bg-blue-50 text-blue-700 text-sm font-bold border border-blue-100">
-                    {appointmentStats.total} total appointments
-                  </div>
-                  <div className="px-4 py-2 rounded-full bg-emerald-50 text-emerald-700 text-sm font-bold border border-emerald-100">
-                    {appointmentStats.upcoming} upcoming
-                  </div>
-                </div>
-              </div>
-              <div className="lg:col-span-4">
-                <div className="bg-slate-950 text-white rounded-3xl p-6 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.45)]">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-bold">Quick Actions</p>
-                  <div className="mt-4 space-y-3 text-sm text-slate-200">
-                    <div className="flex items-center gap-3"><LayoutDashboard className="w-4 h-4 text-blue-400" /> View the appointment queue and status history</div>
-                    <div className="flex items-center gap-3"><CalendarDays className="w-4 h-4 text-blue-400" /> Book using the live /appointments endpoint</div>
-                    <div className="flex items-center gap-3"><ClipboardList className="w-4 h-4 text-blue-400" /> Save notes, prescriptions, and reviews</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      clearAuth();
-                      router.replace("/login");
-                    }}
-                    className="mt-6 w-full px-4 py-3 rounded-2xl bg-white text-slate-950 font-bold hover:bg-slate-100 transition"
-                  >
-                    Logout
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
+      <main className={mainClasses}>
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-3">
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                {isPatient ? `${patientNameDisplay}'s Appointments` : "Appointments"}
+              </h1>
+              <p className="text-sm text-slate-500">
+                Review your scheduled consultations, join telemedicine calls, and see the appointment details below.
+              </p>
+            </div>
+            {isPatient && (
+              <button
+                type="button"
+                onClick={() => setShowAppointmentModal(true)}
+                className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
+              >
+                Book appointment
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <MetricCard title="All" value={appointmentStats.total} icon={<Activity className="w-4 h-4 text-blue-600" />} />
             <MetricCard title="Upcoming" value={appointmentStats.upcoming} icon={<Clock className="w-4 h-4 text-blue-600" />} />
@@ -868,148 +921,79 @@ export default function AppointmentsHubPage() {
             <MetricCard title="Cancelled" value={appointmentStats.cancelled} icon={<XCircle className="w-4 h-4 text-rose-600" />} />
           </div>
 
-          <div className="grid lg:grid-cols-12 gap-6 items-start">
-            {isPatient && (
-              <div className="lg:col-span-4 space-y-4">
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">Book an appointment</h2>
-                    <p className="text-sm text-slate-500 mt-1">Use a real doctor UUID from the backend. The selected time will be submitted directly to /appointments.</p>
-                  </div>
-
-                  <form onSubmit={handleBookingSubmit} className="space-y-4">
-                    <label className="block text-sm font-semibold text-slate-700">
-                      Doctor ID
-                      <input
-                        value={appointmentForm.doctorId}
-                        onChange={(e) => setAppointmentForm((state) => ({ ...state, doctorId: e.target.value.trim() }))}
-                        className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
-                        placeholder="Paste doctor UUID"
-                        required
-                      />
-                    </label>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className="block text-sm font-semibold text-slate-700">
-                        Date
-                        <input
-                          type="date"
-                          value={appointmentForm.appointmentDate}
-                          onChange={(e) => setAppointmentForm((state) => ({ ...state, appointmentDate: e.target.value, appointmentTime: "" }))}
-                          className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
-                          required
-                        />
-                      </label>
-                      <label className="block text-sm font-semibold text-slate-700">
-                        Type
-                        <select
-                          value={appointmentForm.type}
-                          onChange={(e) => setAppointmentForm((state) => ({ ...state, type: e.target.value as AppointmentType }))}
-                          className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
-                        >
-                          {APPOINTMENT_TYPES.map((type) => (
-                            <option key={type} value={type}>{type}</option>
-                          ))}
-                        </select>
-                      </label>
+          {selectedAppointment && (
+            <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.4)]">
+              <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-bold">Selected appointment</p>
+                  <div className="mt-4 space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-2xl font-black tracking-tight">{formatDateTime(selectedAppointment.appointmentTime)}</h3>
+                        <p className="text-slate-300 mt-1">{selectedAppointment.reason || "No reason provided"}</p>
+                      </div>
+                      <StatusPill status={selectedAppointment.status} dark />
                     </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <InfoTile label="Type" value={selectedAppointment.type} />
+                      <InfoTile label="Consultation fee" value={formatCurrency(selectedAppointment.consultationFee || 0)} />
+                      <InfoTile
+                        label="Doctor"
+                        value={
+                          selectedAppointment.doctorName ||
+                          selectedAppointment.doctorFullName ||
+                          selectedAppointment.doctorId.slice(0, 8)
+                        }
+                      />
+                      <InfoTile label="Patient ID" value={selectedAppointment.patientId.slice(0, 8)} />
+                    </div>
+                  </div>
+                </div>
 
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-slate-700">Available slots</span>
+                {selectedAppointment.type === "TELEMEDICINE" && (
+                  <div className="rounded-3xl border border-slate-700 bg-slate-950 p-6">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-bold">Jitsi Telemedicine</p>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <p className="text-xl font-black tracking-tight">Join Jitsi</p>
+                        {isJitsiLink && jitsiRoomName && <p className="text-sm text-blue-100/80">Room: {jitsiRoomName}</p>}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setAppointmentForm((state) => ({ ...state, appointmentTime: "" }))}
-                          className="text-xs font-bold text-blue-600"
+                          onClick={handleRefreshMeeting}
+                          disabled={meetingLoading}
+                          className="rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold px-4 py-2.5 text-sm"
                         >
-                          Clear
+                          {meetingLoading ? "Loading..." : "Refresh link"}
                         </button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {availableSlots.length > 0 ? availableSlots.map((slot) => (
+                        {meetingLink && (
                           <button
-                            key={slot}
                             type="button"
-                            onClick={() => setAppointmentForm((state) => ({ ...state, appointmentTime: slot }))}
-                            className={`rounded-xl border px-3 py-2 text-sm font-bold transition ${appointmentForm.appointmentTime === slot ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"}`}
+                            onClick={() => (isPatient ? openMeetingWithChecklist("JOIN") : handleStartMeeting())}
+                            className="rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-100 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={isPatient && !canPatientJoinMeeting}
                           >
-                            {slot}
+                            Join Jitsi
                           </button>
-                        )) : (
-                          <div className="col-span-3 text-sm text-slate-500 rounded-2xl border border-dashed border-slate-200 p-4">
-                            Select a doctor and date to fetch available slots.
-                          </div>
                         )}
                       </div>
+                      {isPatient && !canPatientJoinMeeting && (
+                        <p className="text-xs text-amber-200 bg-amber-600/10 border border-amber-200 rounded-xl px-3 py-2">
+                          Join is enabled only after doctor starts the meeting.
+                        </p>
+                      )}
                     </div>
-
-                    <label className="block text-sm font-semibold text-slate-700">
-                      Reason
-                      <textarea
-                        value={appointmentForm.reason}
-                        onChange={(e) => setAppointmentForm((state) => ({ ...state, reason: e.target.value }))}
-                        className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
-                        rows={4}
-                        placeholder="Describe symptoms or consultation reason"
-                      />
-                    </label>
-
-                    {bookingPreview && (
-                      <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs uppercase tracking-wider text-blue-600 font-bold">Doctor preview</p>
-                            <h3 className="text-lg font-bold text-slate-900">{bookingPreview.fullName || "Doctor"}</h3>
-                          </div>
-                          <div className="text-right text-sm">
-                            <p className="font-bold text-blue-700">{bookingPreview.specialty || "Specialty unavailable"}</p>
-                            <p className="text-slate-500">{bookingPreview.verificationStatus}</p>
-                          </div>
-                        </div>
-                        <div className="text-sm text-slate-600 flex items-center justify-between">
-                          <span>Fee</span>
-                          <span className="font-bold text-slate-900">{bookingPreview.consultationFee ? formatCurrency(bookingPreview.consultationFee) : "Pending"}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={bookingLoading}
-                      className="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3.5 transition"
-                    >
-                      {bookingLoading ? "Booking & preparing payment..." : "Book & continue to payment"}
-                    </button>
-                  </form>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-                  <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Filter className="w-4 h-4 text-blue-600" /> Filters</h3>
-                  <div className="mt-4 space-y-3">
-                    <input
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
-                      placeholder="Search appointment id, reason, status"
-                    />
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
-                    >
-                      <option value="ALL">All statuses</option>
-                      {APPOINTMENT_STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
                   </div>
-                </div>
+                )}
               </div>
-            )}
+            </div>
+          )}
 
-            <div className={isPatient ? "lg:col-span-8" : "lg:col-span-5"}>
-              <div className="bg-white border border-slate-200 rounded-3xl shadow-sm">
-                <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4">
+          <div className="space-y-6">
+            <div className="lg:col-span-12">
+              <div className="bg-white border border-slate-200 rounded-3xl shadow-sm w-full">
+                <div className="p-6 border-b border-slate-100 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">Appointment queue</h2>
                     <p className="text-sm text-slate-500">Select an appointment to manage meeting, chat, notes, prescriptions, or review actions.</p>
@@ -1031,337 +1015,223 @@ export default function AppointmentsHubPage() {
                   </button>
                 </div>
 
-                <div className="divide-y divide-slate-100 max-h-[34rem] overflow-y-auto">
-                  {visibleAppointments.map((appointment) => (
-                    <button
-                      key={appointment.id}
-                      type="button"
-                      onClick={() => setSelectedAppointmentId(appointment.id)}
-                      className={`w-full text-left p-5 transition ${selectedAppointmentId === appointment.id ? "bg-blue-50/60" : "hover:bg-slate-50"}`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">{appointment.id.slice(0, 8)}...</span>
-                            <StatusPill status={appointment.status} />
-                            <span className="text-xs font-bold text-slate-500">{appointment.type}</span>
-                          </div>
-                          <h3 className="font-bold text-slate-900">{formatDateTime(appointment.appointmentTime)}</h3>
-                          <p className="text-sm text-slate-500 mt-1 line-clamp-2">{appointment.reason || "No reason provided."}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Fee</p>
-                          <p className="font-bold text-slate-900">{formatCurrency(appointment.consultationFee || 0)}</p>
-                        </div>
+                {isPatient && (
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <input
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none"
+                          placeholder="Search appointment id, reason, doctor, status"
+                        />
+                        <select
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value)}
+                          className="w-full max-w-xs rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="ALL">All statuses</option>
+                          {APPOINTMENT_STATUS_OPTIONS.map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
                       </div>
-                    </button>
-                  ))}
-                  {visibleAppointments.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={handleDownloadPDF}
+                        className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
+                      >
+                        Download PDF
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="overflow-x-auto max-h-[34rem]">
+                  {visibleAppointments.length > 0 ? (
+                    <table className="min-w-full w-full border-separate border-spacing-0">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">ID</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Time</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Note</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Status</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Type</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Fee</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white">
+                        {visibleAppointments.map((appointment) => (
+                          <tr
+                            key={appointment.id}
+                            onClick={() => setSelectedAppointmentId(appointment.id)}
+                            className={`border-b border-slate-100 transition cursor-pointer ${selectedAppointmentId === appointment.id ? "bg-blue-50/50" : "hover:bg-slate-50"}`}
+                          >
+                            <td className="px-4 py-4 align-top">
+                              <div className="flex flex-col gap-1">
+                                <span className="font-mono text-xs text-slate-500">{appointment.id.slice(0, 8)}...</span>
+                                <span className="font-semibold text-slate-900">Appointment ID</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <p className="text-slate-900 font-semibold">{formatDateTime(appointment.appointmentTime)}</p>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <p className="text-sm text-slate-600 line-clamp-2">{appointment.reason || "No reason provided."}</p>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <StatusPill status={appointment.status} />
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <span className="text-sm font-bold text-slate-700">{appointment.type}</span>
+                            </td>
+                            <td className="px-4 py-4 align-top text-right">
+                              <span className="font-semibold text-slate-900">{formatCurrency(appointment.consultationFee || 0)}</span>
+                            </td>
+                            <td className="px-4 py-4 align-top text-right">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleJoinMeetingFromRow(appointment);
+                                }}
+                                disabled={!canJoinAppointment(appointment)}
+                                className="rounded-2xl border px-3 py-2 text-sm font-bold transition disabled:opacity-40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400 text-blue-700 border-blue-500 hover:bg-blue-50"
+                              >
+                                Join
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
                     <div className="p-8 text-center text-slate-500">
-                      No appointments match your filters.
+                      No appointments available.
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className={isPatient ? "lg:col-span-4" : "lg:col-span-7"}>
-              <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.4)] mb-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-bold">Selected appointment</p>
-                {selectedAppointment ? (
-                  <div className="mt-3 space-y-3">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-2xl font-black tracking-tight">{formatDateTime(selectedAppointment.appointmentTime)}</h3>
-                        <p className="text-slate-300 mt-1">{selectedAppointment.reason || "No reason provided"}</p>
-                      </div>
-                      <StatusPill status={selectedAppointment.status} dark />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <InfoTile label="Type" value={selectedAppointment.type} />
-                      <InfoTile label="Consultation fee" value={formatCurrency(selectedAppointment.consultationFee || 0)} />
-                      <InfoTile label="Doctor ID" value={selectedAppointment.doctorId.slice(0, 8)} />
-                      <InfoTile label="Patient ID" value={selectedAppointment.patientId.slice(0, 8)} />
-                    </div>
-                    {selectedAppointment.type === "TELEMEDICINE" && (
-                      <div className="rounded-2xl border border-blue-400/30 bg-blue-500/10 p-3 space-y-2">
-                        <p className="text-xs font-bold uppercase tracking-wide text-blue-200">Jitsi Telemedicine</p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleRefreshMeeting}
-                            disabled={meetingLoading}
-                            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-xs font-bold"
-                          >
-                            {meetingLoading ? "Loading..." : "Refresh link"}
-                          </button>
-                          {meetingLink && (
-                            <button
-                              type="button"
-                              onClick={() => (isPatient ? openMeetingWithChecklist("JOIN") : handleStartMeeting())}
-                              className="inline-flex items-center gap-2 text-sm font-bold text-blue-200 hover:text-blue-100 underline"
-                            >
-                              <Video className="w-4 h-4" /> {isPatient ? "Join Jitsi" : "Start Jitsi"}
-                            </button>
-                          )}
-                        </div>
-                        {isJitsiLink && jitsiRoomName && <p className="text-xs text-blue-100/80">Room: {jitsiRoomName}</p>}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-slate-300">Pick an appointment from the queue to load the detail actions.</p>
-                )}
-              </div>
+          </div>
+        </section>
+      </main>
 
-              {isPatient && (
-                <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm mb-6">
-                  <h3 className="font-bold text-slate-900 text-lg">Recent Timeline</h3>
-                  <p className="text-sm text-slate-500 mt-1 mb-4">Your latest appointment state changes at a glance.</p>
-                  <div className="space-y-3">
-                    {patientTimeline.length > 0 ? (
-                      patientTimeline.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setSelectedAppointmentId(item.id)}
-                          className={`w-full text-left rounded-2xl border px-3 py-3 transition ${selectedAppointmentId === item.id ? "border-blue-300 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-bold text-slate-900">{formatDateTime(item.appointmentTime)}</p>
-                            <StatusPill status={item.status} />
-                          </div>
-                          <p className="text-xs text-slate-500 mt-1">{item.type} | {item.reason}</p>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-500">No appointments available in timeline.</p>
-                    )}
-                  </div>
-                </div>
-              )}
+      <Modal
+        isOpen={showAppointmentModal}
+        onClose={() => setShowAppointmentModal(false)}
+        title="Book an appointment"
+      >
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          void handleBookingSubmit(e as unknown as FormEvent<HTMLFormElement>);
+        }} className="space-y-4">
+          <label className="block text-sm font-semibold text-slate-700">
+            Doctor ID
+            <input
+              value={appointmentForm.doctorId}
+              onChange={(e) => setAppointmentForm((state) => ({ ...state, doctorId: e.target.value.trim() }))}
+              className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+              placeholder="Paste doctor UUID"
+              required
+            />
+          </label>
 
-              {selectedAppointment && (
-                <div className="grid xl:grid-cols-2 gap-6">
-                  <div className="space-y-6">
-                    <ActionPanel title="Lifecycle actions" icon={<ShieldAlert className="w-4 h-4" />}>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        {canManage ? (
-                          <>
-                            <label className="block text-sm font-semibold text-slate-700">
-                              New status
-                              <select value={statusToSet} onChange={(e) => setStatusToSet(e.target.value as AppointmentStatus)} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900">
-                                {APPOINTMENT_STATUS_OPTIONS.map((status) => (
-                                  <option key={status} value={status}>{status}</option>
-                                ))}
-                              </select>
-                            </label>
-                            <button onClick={handleStatusUpdate} className="mt-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3">
-                              Update status
-                            </button>
-                          </>
-                        ) : isPatient ? (
-                          <>
-                            <label className="block text-sm font-semibold text-slate-700">
-                              Reschedule time
-                              <input type="datetime-local" value={rescheduleTime} onChange={(e) => setRescheduleTime(e.target.value)} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                            </label>
-                            <button onClick={handleRescheduleAppointment} className="mt-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3">
-                              Reschedule
-                            </button>
-                          </>
-                        ) : (
-                          <div className="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-                            Doctor consultation actions are enabled only after admin verification is APPROVED.
-                          </div>
-                        )}
-                      </div>
-                      {!canManage && (
-                        <button onClick={() => setShowCancelAppointmentConfirm(true)} className="mt-3 w-full rounded-2xl border border-rose-200 text-rose-700 font-bold px-4 py-3 hover:bg-rose-50">
-                          Cancel appointment
-                        </button>
-                      )}
-                    </ActionPanel>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm font-semibold text-slate-700">
+              Date
+              <input
+                type="date"
+                value={appointmentForm.appointmentDate}
+                onChange={(e) => setAppointmentForm((state) => ({ ...state, appointmentDate: e.target.value, appointmentTime: "" }))}
+                className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+                required
+              />
+            </label>
+            <label className="block text-sm font-semibold text-slate-700">
+              Type
+              <select
+                value={appointmentForm.type}
+                onChange={(e) => setAppointmentForm((state) => ({ ...state, type: e.target.value as AppointmentType }))}
+                className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+              >
+                {APPOINTMENT_TYPES.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-                    <ActionPanel title="Chat" icon={<MessageSquare className="w-4 h-4" />}>
-                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                        {chatHistory.length > 0 ? chatHistory.map((message, index) => (
-                          <div key={message.id || index} className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
-                            <div className="flex items-center justify-between gap-3 text-xs text-slate-400 mb-1">
-                              <span className="font-bold text-slate-500">{message.senderId.slice(0, 8)}...</span>
-                              <span>{message.sentAt ? formatDateTime(message.sentAt) : "Just now"}</span>
-                            </div>
-                            <p className="text-sm text-slate-700">{message.message}</p>
-                          </div>
-                        )) : (
-                          <p className="text-sm text-slate-500">No messages yet.</p>
-                        )}
-                      </div>
-                      <div className="mt-4 flex gap-3">
-                        <input value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} placeholder="Type a message" className="flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                        <button onClick={handleSendChat} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3">
-                          <Send className="w-4 h-4" /> Send
-                        </button>
-                      </div>
-                    </ActionPanel>
-
-                    <ActionPanel title="Jitsi Meeting" icon={<Video className="w-4 h-4" />}>
-                      {selectedAppointment.type !== "TELEMEDICINE" ? (
-                        <p className="text-sm text-slate-500">This appointment is in-clinic. Jitsi meeting is not required.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={handleRefreshMeeting}
-                              disabled={meetingLoading}
-                              className="rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold px-4 py-2.5 text-sm"
-                            >
-                              {meetingLoading ? "Loading link..." : "Load Jitsi link"}
-                            </button>
-                            {meetingLink && (
-                              <button
-                                type="button"
-                                onClick={() => (isPatient ? openMeetingWithChecklist("JOIN") : handleStartMeeting())}
-                                disabled={
-                                  (isPatient && !canPatientJoinMeeting) ||
-                                  (!isPatient && !!selectedAppointment && !["CONFIRMED", "ACCEPTED"].includes(selectedAppointment.status))
-                                }
-                                className="rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {isPatient ? "Join appointment" : "Start appointment"}
-                              </button>
-                            )}
-                          </div>
-
-                          {isPatient && !canPatientJoinMeeting && (
-                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                              Join is enabled only after doctor starts the meeting.
-                            </p>
-                          )}
-
-                          {isJitsiLink ? (
-                            <>
-                              {jitsiRoomName && <p className="text-xs text-slate-500">Jitsi room: {jitsiRoomName}</p>}
-                              {meetingLink && (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowJitsiPreview((state) => !state)}
-                                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-                                >
-                                  {showJitsiPreview ? "Hide embedded Jitsi" : "Show embedded Jitsi"}
-                                </button>
-                              )}
-                              {showJitsiPreview && jitsiEmbedUrl && (
-                                <iframe
-                                  src={jitsiEmbedUrl}
-                                  title="Jitsi Meeting"
-                                  className="w-full h-80 rounded-2xl border border-slate-200"
-                                  allow="camera; microphone; fullscreen; display-capture"
-                                />
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-xs text-slate-500">Current backend should return a Jitsi URL. If this is not a Jitsi link, verify appointment-service meeting-link response.</p>
-                          )}
-                        </div>
-                      )}
-                    </ActionPanel>
-                  </div>
-
-                  <div className="space-y-6">
-                    {canManage && (
-                      <ActionPanel title="Consultation note" icon={<FileText className="w-4 h-4" />}>
-                        <form onSubmit={handleSaveNote} className="space-y-3">
-                          <label className="block text-sm font-semibold text-slate-700">
-                            Chief complaint
-                            <input value={noteForm.chiefComplaint} onChange={(e) => setNoteForm((state) => ({ ...state, chiefComplaint: e.target.value }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                          </label>
-                          <label className="block text-sm font-semibold text-slate-700">
-                            Clinical notes
-                            <textarea value={noteForm.clinicalNotes} onChange={(e) => setNoteForm((state) => ({ ...state, clinicalNotes: e.target.value }))} rows={4} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                          </label>
-                          <label className="block text-sm font-semibold text-slate-700">
-                            Diagnosis
-                            <input value={noteForm.diagnosis} onChange={(e) => setNoteForm((state) => ({ ...state, diagnosis: e.target.value }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                          </label>
-                          <button type="submit" className="w-full rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-3">
-                            Save note
-                          </button>
-                        </form>
-                      </ActionPanel>
-                    )}
-
-                    {canManage && (
-                      <ActionPanel title="Prescription" icon={<ClipboardList className="w-4 h-4" />}>
-                        <form onSubmit={handleSavePrescription} className="space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <label className="block text-sm font-semibold text-slate-700">
-                              Valid until
-                              <input type="date" value={prescriptionForm.validUntil} onChange={(e) => setPrescriptionForm((state) => ({ ...state, validUntil: e.target.value }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                            </label>
-                            <label className="block text-sm font-semibold text-slate-700">
-                              Route
-                              <input value={prescriptionForm.items[0].route} onChange={(e) => setPrescriptionForm((state) => ({ ...state, items: [{ ...state.items[0], route: e.target.value }] }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                            </label>
-                          </div>
-                          <label className="block text-sm font-semibold text-slate-700">
-                            Medicine name
-                            <input value={prescriptionForm.items[0].medicineName} onChange={(e) => setPrescriptionForm((state) => ({ ...state, items: [{ ...state.items[0], medicineName: e.target.value }] }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                          </label>
-                          <div className="grid grid-cols-3 gap-3">
-                            <label className="block text-sm font-semibold text-slate-700">
-                              Dosage
-                              <input value={prescriptionForm.items[0].dosage} onChange={(e) => setPrescriptionForm((state) => ({ ...state, items: [{ ...state.items[0], dosage: e.target.value }] }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                            </label>
-                            <label className="block text-sm font-semibold text-slate-700">
-                              Frequency
-                              <input value={prescriptionForm.items[0].frequency} onChange={(e) => setPrescriptionForm((state) => ({ ...state, items: [{ ...state.items[0], frequency: e.target.value }] }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                            </label>
-                            <label className="block text-sm font-semibold text-slate-700">
-                              Duration
-                              <input value={prescriptionForm.items[0].duration} onChange={(e) => setPrescriptionForm((state) => ({ ...state, items: [{ ...state.items[0], duration: e.target.value }] }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                            </label>
-                          </div>
-                          <label className="block text-sm font-semibold text-slate-700">
-                            Prescription notes
-                            <textarea value={prescriptionForm.notes} onChange={(e) => setPrescriptionForm((state) => ({ ...state, notes: e.target.value }))} rows={3} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                          </label>
-                          <button type="submit" className="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3">
-                            Save prescription
-                          </button>
-                        </form>
-                      </ActionPanel>
-                    )}
-
-                    {isPatient && selectedAppointment.status === "COMPLETED" && (
-                      <ActionPanel title="Review your doctor" icon={<Star className="w-4 h-4" />}>
-                        <form onSubmit={handleSubmitReview} className="space-y-3">
-                          <label className="block text-sm font-semibold text-slate-700">
-                            Rating
-                            <select value={reviewForm.rating} onChange={(e) => setReviewForm((state) => ({ ...state, rating: Number(e.target.value) }))} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900">
-                              {[5, 4, 3, 2, 1].map((rating) => (
-                                <option key={rating} value={rating}>{rating} stars</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="block text-sm font-semibold text-slate-700">
-                            Comment
-                            <textarea value={reviewForm.comment} onChange={(e) => setReviewForm((state) => ({ ...state, comment: e.target.value }))} rows={4} className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900" />
-                          </label>
-                          <button type="submit" className="w-full rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-3">
-                            Submit review
-                          </button>
-                        </form>
-                      </ActionPanel>
-                    )}
-                  </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-slate-700">Available slots</span>
+              <button
+                type="button"
+                onClick={() => setAppointmentForm((state) => ({ ...state, appointmentTime: "" }))}
+                className="text-xs font-bold text-blue-600"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {availableSlots.length > 0 ? availableSlots.map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => setAppointmentForm((state) => ({ ...state, appointmentTime: slot }))}
+                  className={`rounded-xl border px-3 py-2 text-sm font-bold transition ${appointmentForm.appointmentTime === slot ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"}`}
+                >
+                  {slot}
+                </button>
+              )) : (
+                <div className="col-span-3 text-sm text-slate-500 rounded-2xl border border-dashed border-slate-200 p-4">
+                  Select a doctor and date to fetch available slots.
                 </div>
               )}
             </div>
           </div>
-        </section>
-      </main>
+
+          <label className="block text-sm font-semibold text-slate-700">
+            Reason
+            <textarea
+              value={appointmentForm.reason}
+              onChange={(e) => setAppointmentForm((state) => ({ ...state, reason: e.target.value }))}
+              className="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+              rows={4}
+              placeholder="Describe symptoms or consultation reason"
+            />
+          </label>
+
+          {bookingPreview && (
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-blue-600 font-bold">Doctor preview</p>
+                  <h3 className="text-lg font-bold text-slate-900">{bookingPreview.fullName || "Doctor"}</h3>
+                </div>
+                <div className="text-right text-sm">
+                  <p className="font-bold text-blue-700">{bookingPreview.specialty || "Specialty unavailable"}</p>
+                  <p className="text-slate-500">{bookingPreview.verificationStatus}</p>
+                </div>
+              </div>
+              <div className="text-sm text-slate-600 flex items-center justify-between">
+                <span>Fee</span>
+                <span className="font-bold text-slate-900">{bookingPreview.consultationFee ? formatCurrency(bookingPreview.consultationFee) : "Pending"}</span>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={bookingLoading}
+            className="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3.5 transition"
+          >
+            {bookingLoading ? "Booking & preparing payment..." : "Book & continue to payment"}
+          </button>
+        </form>
+      </Modal>
 
       <ConfirmDialog
         open={showCancelAppointmentConfirm}

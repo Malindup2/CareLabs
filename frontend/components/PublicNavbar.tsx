@@ -64,6 +64,14 @@ export default function PublicNavbar() {
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
                   {role || "User"}
                 </span>
+                {role === "PATIENT" && (
+                  <Link
+                    href="/patient/dashboard"
+                    className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-3 py-2 rounded-full transition-colors"
+                  >
+                    Dashboard
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={handleLogout}
