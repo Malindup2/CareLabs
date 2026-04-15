@@ -60,7 +60,10 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
             }
 
             String role = jwtUtil.extractRole(token);
+            System.out.println("[GATEWAY-AUTH] Token Role: " + role + " | Required: " + config.getRequiredRoles());
+            
             if (config.getRequiredRoles() != null && !config.getRequiredRoles().contains(role)) {
+                System.err.println("[GATEWAY-AUTH] Forbidden: Role " + role + " is not in " + config.getRequiredRoles());
                 return onError(exchange, "Insufficient Permissions", HttpStatus.FORBIDDEN);
             }
 

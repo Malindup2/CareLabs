@@ -422,6 +422,15 @@ export default function DoctorDashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-refresh appointments every 30 seconds to pick up payment confirmations
+  useEffect(() => {
+    if (!token || !profile?.id) return;
+    const pollTimer = setInterval(() => {
+        void refreshAppointments();
+    }, 30000);
+    return () => clearInterval(pollTimer);
+  }, [token, profile?.id]);
+
   useEffect(() => {
     if (!token) return;
 
@@ -585,6 +594,60 @@ export default function DoctorDashboardPage() {
     }
   };
 
+  useEffect(() => {
+    if (isNoteModalOpen && selectedAppointmentId && token) {
+      const fetchCurrentNote = async () => {
+        try {
+          const existing = await apiGetAuth<ConsultationNote>(`/appointments/${selectedAppointmentId}/notes`, token);
+          if (existing) {
+            setConsultationNote({
+              chiefComplaint: existing.chiefComplaint || "",
+              clinicalNotes: existing.clinicalNotes || "",
+              diagnosis: existing.diagnosis || "",
+            });
+          } else {
+            setConsultationNote({ chiefComplaint: "", clinicalNotes: "", diagnosis: "" });
+          }
+        } catch (err) {
+          // Record doesn't exist yet, reset form
+          setConsultationNote({ chiefComplaint: "", clinicalNotes: "", diagnosis: "" });
+        }
+      };
+      void fetchCurrentNote();
+    }
+  }, [isNoteModalOpen, selectedAppointmentId, token]);
+
+  useEffect(() => {
+    if (isRxModalOpen && selectedAppointmentId && token) {
+      const fetchCurrentRx = async () => {
+        try {
+          const existing = await apiGetAuth<Prescription>(`/appointments/${selectedAppointmentId}/prescriptions`, token);
+          if (existing) {
+            setPrescriptionPayload({
+              validUntil: existing.validUntil || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              notes: existing.notes || "",
+              items: existing.items || [],
+            });
+          } else {
+            setPrescriptionPayload({
+              validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              notes: "",
+              items: [],
+            });
+          }
+        } catch (err) {
+          // Record doesn't exist yet, reset form
+          setPrescriptionPayload({
+            validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            notes: "",
+            items: [],
+          });
+        }
+      };
+      void fetchCurrentRx();
+    }
+  }, [isRxModalOpen, selectedAppointmentId, token]);
+
   const handleProfileImageUpload = async (e: FormEvent) => {
     e.preventDefault();
     if (!token || !profileImageFile) {
@@ -719,8 +782,11 @@ export default function DoctorDashboardPage() {
     }
   };
 
-  const handleStatusUpdate = async () => {
-    if (!token || !selectedAppointmentId) {
+  const handleStatusUpdate = async (id?: string, status?: AppointmentStatus) => {
+    const targetId = id || selectedAppointmentId;
+    const targetStatus = status || statusToSet;
+
+    if (!token || !targetId) {
       toast.error("Select an appointment first.");
       return;
     }
@@ -730,13 +796,14 @@ export default function DoctorDashboardPage() {
       return;
     }
 
+    const loadingToast = toast.loading(`Updating status to ${targetStatus}...`);
     try {
-      await apiPutAuth<Appointment>(`/appointments/${selectedAppointmentId}/status?status=${statusToSet}`, {}, token);
+      await apiPutAuth<Appointment>(`/appointments/${targetId}/status?status=${targetStatus}`, {}, token);
       await refreshAppointments();
-      toast.success("Appointment status updated.");
+      toast.success(`Appointment marked as ${targetStatus}.`, { id: loadingToast });
     } catch (err: unknown) {
       const e = err as { message?: string };
-      toast.error(e.message || "Unable to update appointment status");
+      toast.error(e.message || "Unable to update appointment status", { id: loadingToast });
     }
   };
 
@@ -1835,6 +1902,13 @@ export default function DoctorDashboardPage() {
         {activeTab === "appointments" && (
           <div className="space-y-6">
             <div className="bg-white border border-slate-200 rounded-[2.5rem] p-6 shadow-sm flex flex-wrap items-center justify-between gap-6">
+               <div className="flex flex-col">
+                  <h2 className="text-xl font-bold text-slate-900 leading-tight">Patient Records</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Live Connection Active</p>
+                  </div>
+               </div>
                <div className="flex flex-1 min-w-[300px] items-center gap-4">
                   <div className="relative flex-1 group">
                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
@@ -1905,7 +1979,8 @@ export default function DoctorDashboardPage() {
                                ACCEPTED: "bg-indigo-100 text-indigo-700",
                                COMPLETED: "bg-emerald-100 text-emerald-700",
                                CANCELLED: "bg-slate-100 text-slate-500",
-                               REJECTED: "bg-rose-100 text-rose-700"
+                               REJECTED: "bg-rose-100 text-rose-700",
+                               NO_SHOW: "bg-orange-100 text-orange-700"
                              };
                              const isSelected = selectedAppointmentId === a.id;
                              
@@ -1938,12 +2013,55 @@ export default function DoctorDashboardPage() {
                                      <p className="text-xs font-bold text-slate-600 line-clamp-1 max-w-[200px]">{a.reason || "General Consultation Request"}</p>
                                   </td>
                                   <td className="px-6 py-6">
-                                     <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest whitespace-nowrap ${statusColors[a.status] || "bg-slate-100"}`}>
-                                        {a.status}
-                                     </span>
+                                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest whitespace-nowrap ${statusColors[a.status] || "bg-slate-100"}`}>
+                                         {a.status.replace("_", " ")}
+                                      </span>
                                   </td>
                                   <td className="px-8 py-6">
                                      <div className="flex items-center justify-end gap-2">
+                                        {/* Status Management Actions */}
+                                        {a.status === "CONFIRMED" && (
+                                          <>
+                                            <button 
+                                              onClick={() => handleStatusUpdate(a.id, "ACCEPTED")}
+                                              disabled={!canConsult}
+                                              className="p-2.5 rounded-xl border border-emerald-100 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all active:scale-95 disabled:opacity-30"
+                                              title="Accept Appointment"
+                                            >
+                                              <CheckCircle2 className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                              onClick={() => handleStatusUpdate(a.id, "REJECTED")}
+                                              disabled={!canConsult}
+                                              className="p-2.5 rounded-xl border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white transition-all active:scale-95 disabled:opacity-30"
+                                              title="Reject Appointment"
+                                            >
+                                              <XCircle className="w-4 h-4" />
+                                            </button>
+                                          </>
+                                        )}
+
+                                        {a.status === "ACCEPTED" && (
+                                          <>
+                                            <button 
+                                              onClick={() => handleStatusUpdate(a.id, "COMPLETED")}
+                                              disabled={!canConsult}
+                                              className="p-2.5 rounded-xl border border-indigo-100 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-all active:scale-95 disabled:opacity-30"
+                                              title="Mark as Completed"
+                                            >
+                                              <CheckCircle2 className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                              onClick={() => handleStatusUpdate(a.id, "NO_SHOW")}
+                                              disabled={!canConsult}
+                                              className="p-2.5 rounded-xl border border-amber-100 text-amber-500 hover:bg-amber-500 hover:text-white transition-all active:scale-95 disabled:opacity-30"
+                                              title="Mark as No Show"
+                                            >
+                                              <ShieldAlert className="w-4 h-4" />
+                                            </button>
+                                          </>
+                                        )}
+
                                         {a.type === "TELEMEDICINE" && (() => {
                                            const canJoin = a.status === "CONFIRMED" || a.status === "ACCEPTED";
                                            const isThisLoading = meetingLoading && selectedAppointmentId === a.id;

@@ -25,6 +25,7 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
         String role = request.getHeader("X-Auth-Role");
 
         if (userId != null && !userId.isEmpty() && role != null && !role.isBlank()) {
+            System.out.println("[APP-SEC] Found headers - UserID: " + userId + " | Role: " + role);
             try {
                 // Validate that userId is a valid UUID format before setting authentication
                 java.util.UUID.fromString(userId);
@@ -36,9 +37,10 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (IllegalArgumentException e) {
-                // Invalid UUID format in header, skip setting authentication
-                // This will be caught by @PreAuthorize annotation in the controller
+                System.err.println("[APP-SEC] Invalid UUID in X-Auth-User-Id: " + userId);
             }
+        } else {
+            System.err.println("[APP-SEC] Missing/Empty Auth Headers downstream. UserID: " + userId + " | Role: " + role);
         }
 
         chain.doFilter(request, response);

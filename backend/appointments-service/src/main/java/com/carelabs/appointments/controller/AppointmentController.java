@@ -212,7 +212,7 @@ public class AppointmentController {
 
     //Get a Prescription
     @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
-    @GetMapping("/prescriptions/{id}")
+    @GetMapping("/{id}/prescriptions")
     public ResponseEntity<com.carelabs.appointments.entity.Prescription> getPrescription(@PathVariable UUID id) {
         return ResponseEntity.ok(appointmentService.getPrescription(id));
     }

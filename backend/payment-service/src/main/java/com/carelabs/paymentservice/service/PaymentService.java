@@ -46,15 +46,23 @@ public class PaymentService {
     private final org.springframework.kafka.core.KafkaTemplate<String, PaymentStatusEvent> kafkaTemplate;
 
     public PayHereCheckoutResponse initiatePayment(PaymentInitRequest request) {
+        log.info("Initiating payment for AppointmentID: {}", request.getAppointmentId());
+        
         BigDecimal appointmentFee = paymentValidationService.validateAndResolveAppointmentFee(request.getAppointmentId());
 
+        // Check for existing payment — if patient retries, reuse the same record
         Payment payment = paymentRepository.findByAppointmentId(request.getAppointmentId())
-            .orElseGet(() -> {
-                    BigDecimal totalAmount = paymentPricingService.resolveConsultationFee(appointmentFee);
-                BigDecimal platformFee = paymentPricingService.calculatePlatformFee(totalAmount);
-                BigDecimal doctorEarning = paymentPricingService.calculateDoctorEarning(totalAmount);
+                .orElse(null);
 
-                Payment newPayment = Payment.builder()
+        if (payment != null) {
+            log.info("Found existing payment (ID: {}) with status: {}. Resuming checkout.", payment.getId(), payment.getStatus());
+        } else {
+            log.info("No existing payment found. Creating new PENDING record.");
+            BigDecimal totalAmount = paymentPricingService.resolveConsultationFee(appointmentFee);
+            BigDecimal platformFee = paymentPricingService.calculatePlatformFee(totalAmount);
+            BigDecimal doctorEarning = paymentPricingService.calculateDoctorEarning(totalAmount);
+
+            payment = Payment.builder()
                     .appointmentId(request.getAppointmentId())
                     .amount(totalAmount)
                     .platformFee(platformFee)
@@ -63,8 +71,8 @@ public class PaymentService {
                     .currency(currency)
                     .provider("PAYHERE")
                     .build();
-                return paymentRepository.save(newPayment);
-            });
+            payment = paymentRepository.save(payment);
+        }
 
         String orderId = payment.getId().toString();
 
@@ -75,8 +83,8 @@ public class PaymentService {
         //Return the complete package to the React frontend
         return PayHereCheckoutResponse.builder()
                 .merchantId(merchantId)
-            .returnUrl(frontendBaseUrl + "/appointments")
-            .cancelUrl(frontendBaseUrl + "/appointments")
+            .returnUrl(frontendBaseUrl + "/patient/appointments")
+            .cancelUrl(frontendBaseUrl + "/patient/appointments")
                 .notifyUrl(notifyUrl) 
             .checkoutUrl(sandboxMode ? "https://sandbox.payhere.lk/pay/checkout" : "https://www.payhere.lk/pay/checkout")
                 .orderId(orderId)

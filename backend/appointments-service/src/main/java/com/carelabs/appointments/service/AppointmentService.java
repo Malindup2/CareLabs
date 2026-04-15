@@ -284,7 +284,7 @@ public class AppointmentService {
 
     public ConsultationNote getNote(UUID appointmentId) {
         return consultationNoteRepository.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new RuntimeException("No notes found for this appointment"));
+                .orElse(null);
     }
 
     public Prescription savePrescription(UUID appointmentId, Prescription prescription) {
@@ -298,7 +298,7 @@ public class AppointmentService {
 
     public Prescription getPrescription(UUID appointmentId) {
         return prescriptionRepository.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new RuntimeException("No prescription found for this appointment"));
+                .orElse(null);
     }
 
     public Review saveReview(UUID appointmentId, Review review) {
