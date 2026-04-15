@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ReactNode } from "react";
-import { Activity } from "lucide-react";
+import { Activity, ChevronLeft } from "lucide-react";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -30,8 +30,12 @@ export default function AuthLayout({ children, heading, subheading }: AuthLayout
         {/* Optional marketing contextual overlay on top of the image */}
         <div className="relative z-10 w-full max-w-lg mb-10 text-slate-50 backdrop-blur-md bg-white/10 p-8 rounded-2xl border border-white/20 shadow-2xl">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-md">
-              <Activity className="w-8 h-8 text-white" />
+            <div className="h-14 w-14 overflow-hidden rounded-2xl">
+               <img
+                src="/images/carelabs.png"
+                alt="CareLabs Logo"
+                className="w-full h-full object-contain"
+               />
             </div>
             <h2 className="text-3xl font-bold tracking-tight">CareLabs</h2>
           </div>
@@ -45,9 +49,25 @@ export default function AuthLayout({ children, heading, subheading }: AuthLayout
       <div className="w-full lg:w-1/2 flex items-center justify-center px-8 sm:px-12 lg:px-24 py-12 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.02)] z-10 relative">
         <div className="w-full max-w-md mx-auto relative">
           
+          <Link
+            href="/"
+            className="group absolute -top-12 left-0 flex items-center gap-2 text-slate-400 hover:text-slate-900 transition-all text-xs font-black uppercase tracking-widest"
+          >
+            <div className="h-8 w-8 rounded-xl border border-slate-100 flex items-center justify-center group-hover:bg-slate-50 transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </div>
+            Back to Home
+          </Link>
+
           {/* Mobile Logo View */}
-          <div className="lg:hidden flex items-center gap-2 mb-8 text-blue-600 font-semibold text-2xl tracking-tight">
-            <Activity className="w-8 h-8" />
+          <div className="lg:hidden flex items-center gap-3 mb-8 text-slate-900 font-black text-2xl tracking-tighter">
+             <div className="h-10 w-10 overflow-hidden rounded-xl">
+               <img
+                src="/images/carelabs.png"
+                alt="CareLabs Logo"
+                className="w-full h-full object-contain"
+               />
+            </div>
             <span>CareLabs</span>
           </div>
 

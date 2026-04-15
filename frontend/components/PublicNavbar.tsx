@@ -37,9 +37,13 @@ export default function PublicNavbar() {
         <div className="flex justify-between h-20 items-center">
           
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="p-2 bg-gradient-to-tr from-primary to-blue-500 rounded-xl shadow-[0_4px_14px_0_rgba(37,99,235,0.25)] group-hover:scale-105 transition-transform duration-300 ease-out">
-              <Activity className="w-5 h-5 text-white" />
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative h-10 w-10 overflow-hidden rounded-xl group-hover:scale-105 transition-transform duration-300">
+               <img
+                src="/images/carelabs.png"
+                alt="CareLabs Logo"
+                className="w-full h-full object-contain"
+               />
             </div>
             <span className="text-2xl font-bold tracking-tight text-slate-900 group-hover:opacity-80 transition-opacity">CareLabs</span>
           </Link>

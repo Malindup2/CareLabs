@@ -17,6 +17,9 @@ import java.util.Map;
 @Service
 public class SymptomCheckService {
 
+    @Value("${gemini.api.url:}")
+    private String geminiApiUrl;
+
     @Value("${llm.provider:}")
     private String provider;
 
@@ -71,8 +74,13 @@ public class SymptomCheckService {
             throw new RuntimeException("Gemini model is missing");
         }
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + geminiModel
-                + ":generateContent?key=" + geminiApiKey;
+        String url;
+        if (geminiApiUrl != null && !geminiApiUrl.isBlank()) {
+            url = geminiApiUrl + "?key=" + geminiApiKey;
+        } else {
+            url = "https://generativelanguage.googleapis.com/v1beta/models/" + geminiModel
+                    + ":generateContent?key=" + geminiApiKey;
+        }
 
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(

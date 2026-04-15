@@ -19,8 +19,15 @@ export default function PatientSidebar() {
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 hidden md:flex shrink-0 flex-col" suppressHydrationWarning>
       <div className="p-6 border-b border-slate-800">
-        <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-          <Stethoscope className="w-6 h-6 text-blue-500" /> CareLabs
+        <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
+           <div className="h-10 w-10 overflow-hidden rounded-xl flex items-center justify-center">
+             <img
+              src="/images/carelabs.png"
+              alt="CareLabs Logo"
+              className="w-full h-full object-contain"
+             />
+          </div> 
+          CareLabs
         </h1>
       </div>
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">

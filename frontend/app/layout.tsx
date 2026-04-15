@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CareLabs",
   description: "Next Generation Healthcare Platform",
+  icons: {
+    icon: "/images/carelabs.png",
+  },
 };
 
 export default function RootLayout({

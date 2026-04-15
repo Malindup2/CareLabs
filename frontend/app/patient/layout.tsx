@@ -13,6 +13,7 @@ const routeTitles: Record<string, string> = {
   "/patient/medical-history": "Medical History",
   "/patient/allergies": "Allergies",
   "/patient/reports": "Reports",
+  "/patient/ai-assessment": "Health Intelligence Center",
 };
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
@@ -42,9 +43,9 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   const pageTitle = useMemo(() => routeTitles[pathname] ?? "Patient Portal", [pathname]);
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       <PatientSidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
           <div className="space-y-1">
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">{pageTitle}</h1>

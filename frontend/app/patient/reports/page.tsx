@@ -2,6 +2,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
+  CloudUpload,
+  FileText,
+  Trash2,
+  Eye,
+  Activity,
+  Search,
+  RefreshCw,
+  X,
+  ArrowRight,
+  ShieldCheck,
+  LayoutDashboard,
+  FilePlus,
+  ArrowUpCircle
+} from "lucide-react";
+import {
   apiGetAuth,
   apiPostAuthFormData,
   apiDeleteAuth,
@@ -56,12 +71,12 @@ export default function MedicalReportsPage() {
     formData.append("type", type);
     try {
       await apiPostAuthFormData<Report>("/patients/reports", formData, token);
-      toast.success("Report uploaded");
+      toast.success("Diagnostic artifact registered");
       fileInputRef.current.value = "";
       setSelectedFileName("");
       fetchReports();
     } catch (err: any) {
-      toast.error(err.message || "Upload failed");
+      toast.error(err.message || "Registry synchronization failed");
     } finally {
       setUploading(false);
     }
@@ -69,110 +84,150 @@ export default function MedicalReportsPage() {
 
   const handleDelete = async (id: string) => {
     if (!token) return;
-    if (!window.confirm("Delete this report?")) return;
+    if (!window.confirm("Delete this diagnostic artifact?")) return;
     try {
       await apiDeleteAuth(`/patients/reports/${id}`, token);
-      toast.success("Report deleted");
+      toast.success("Artifact revoked");
       fetchReports();
     } catch (err: any) {
-      toast.error(err.message || "Delete failed");
+      toast.error(err.message || "Revocation failed");
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
+    <div className="space-y-8 animate-in fade-in duration-700">
+      <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm group">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Medical Reports</p>
-            <h1 className="mt-3 text-3xl font-black text-slate-900 tracking-tight">Your medical record library</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500">Upload, review and manage your lab reports, prescriptions, and radiology documents.</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400 group-hover:text-blue-500 transition-colors">Diagnostic Evidence Library</p>
+            <h1 className="mt-3 text-4xl font-black text-slate-900 tracking-tight">Clinical Artifact Repository</h1>
+            <p className="mt-2 max-w-2xl text-sm font-medium text-slate-500 leading-relaxed">
+              Securely store and manage your high-fidelity medical records, including laboratory diagnostics, radiology imaging, and pharmaceutical protocols.
+            </p>
           </div>
-          <div className="rounded-2xl bg-slate-50 border border-slate-200 px-5 py-4 text-sm font-semibold text-slate-700">
-            {reports.length} report{reports.length === 1 ? "" : "s"}
+          <div className="rounded-2xl bg-slate-900 border border-slate-800 px-6 py-4 flex items-center gap-3 shadow-xl">
+             <FilePlus className="w-5 h-5 text-blue-500 animate-pulse" />
+             <span className="text-[10px] font-black uppercase tracking-widest text-white">
+                {reports.length} Registered Documents
+             </span>
           </div>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 bg-slate-50 border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Upload new report</p>
-          <form onSubmit={handleUpload} className="mt-6 space-y-6">
-            <div className="space-y-4">
-              <label className="block text-sm font-semibold text-slate-700">Report File</label>
-              <label className="group block cursor-pointer rounded-[2rem] border-2 border-dashed border-slate-300 bg-white px-5 py-8 text-center transition hover:border-blue-300 hover:bg-blue-50">
-                <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-blue-500/10 text-blue-600 grid place-items-center text-2xl">
-                  📎
-                </div>
-                <p className="text-sm font-semibold text-slate-900">Click to select a file</p>
-                <p className="mt-2 text-xs text-slate-500">PDF, JPG, PNG up to 10MB</p>
-                {selectedFileName && (
-                  <p className="mt-3 text-xs font-semibold text-slate-700">Selected: {selectedFileName}</p>
-                )}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={(e) => setSelectedFileName(e.target.files?.[0]?.name || "")}
-                  className="hidden"
+      <div className="grid lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-white border border-slate-200 rounded-[2.5rem] p-10 shadow-sm group">
+            <div className="flex items-center gap-3 mb-8">
+               <div className="h-12 w-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shadow-sm">
+                  <CloudUpload className="w-6 h-6" />
+               </div>
+               <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">Evidence Ingest</h2>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">Initialize Registry Upload</p>
+               </div>
+            </div>
+            
+            <form onSubmit={handleUpload} className="space-y-8">
+              <div className="space-y-4">
+                <label className="group block cursor-pointer rounded-[3rem] border-2 border-dashed border-slate-200 bg-slate-50 p-10 text-center transition-all hover:bg-white hover:border-blue-500 hover:shadow-xl hover:shadow-blue-200/50">
+                  <div className="mx-auto mb-6 h-16 w-16 rounded-[2rem] bg-white border border-slate-100 text-slate-400 group-hover:text-blue-600 shadow-sm grid place-items-center transition-colors">
+                     <FilePlus className="w-8 h-8" />
+                  </div>
+                  <p className="text-sm font-black text-slate-900 tracking-tight">Select Diagnostic Artifact</p>
+                  <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">PDF, JPG, PNG (Max 10MB)</p>
+                  {selectedFileName && (
+                    <div className="mt-6 flex items-center justify-center gap-2 p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
+                       <ShieldCheck className="w-4 h-4" />
+                       <span className="text-[10px] font-black uppercase tracking-tight truncate max-w-full">{selectedFileName}</span>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => setSelectedFileName(e.target.files?.[0]?.name || "")}
+                    className="hidden"
+                    required
+                  />
+                </label>
+              </div>
+
+              <div className="space-y-2 px-1">
+                <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block">Classification Category</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as ReportType)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none"
                   required
-                />
-              </label>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Type</label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as ReportType)}
-                className="w-full rounded-[2rem] border border-slate-200 bg-white px-5 py-4 text-sm text-slate-900"
-                required
+                >
+                  {REPORT_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-[2rem] bg-slate-900 px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50"
+                disabled={uploading}
               >
-                {REPORT_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="w-full rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all"
-              disabled={uploading}
-            >
-              {uploading ? "Uploading..." : "Upload Report"}
-            </button>
-          </form>
+                {uploading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Synchronizing...
+                  </>
+                ) : (
+                  <>
+                    Commence Registry Upload <ArrowUpCircle className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
         </div>
 
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-8 space-y-4">
           {loading ? (
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm text-slate-500">Loading...</div>
+             <div className="flex h-64 items-center justify-center rounded-[2.5rem] border border-slate-200 bg-white">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+             </div>
           ) : reports.length === 0 ? (
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm text-slate-500">No reports found. Upload a report to keep your health record complete.</div>
+            <div className="py-24 flex flex-col items-center justify-center text-center opacity-50 bg-white border border-slate-200 rounded-[2.5rem]">
+               <LayoutDashboard className="w-16 h-16 text-slate-200 mb-6" />
+               <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 tracking-[0.3em]">No Diagnostic Artifacts Found</p>
+            </div>
           ) : (
-            <div className="space-y-4">
+            <div className="grid gap-6">
               {reports.map((r) => (
-                <div key={r.id} className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6 shadow-sm">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
+                <div key={r.id} className="group/item relative overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-8 hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+                    <div className="flex items-center gap-6">
+                       <div className="h-16 w-16 rounded-[1.5rem] bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover/item:text-blue-500 transition-colors shadow-sm">
+                          <FileText className="w-8 h-8" />
+                       </div>
+                       <div>
+                          <p className="text-xl font-black text-slate-900 tracking-tight leading-none group-hover/item:text-blue-600 transition-colors">{r.fileName}</p>
+                          <div className="mt-3 flex items-center gap-3">
+                             <span className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">{r.type}</span>
+                             <span className="h-1 w-1 rounded-full bg-slate-300" />
+                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">ID: {r.id.slice(0, 8).toUpperCase()}</span>
+                          </div>
+                       </div>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-3">
                       <a
                         href={r.fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xl font-bold text-slate-900 hover:text-blue-600 transition"
+                        className="h-12 px-6 rounded-2xl bg-white border border-slate-200 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-900 hover:bg-slate-50 hover:border-blue-300 transition-all active:scale-95 shadow-sm"
                       >
-                        {r.fileName}
+                         <Eye className="w-4 h-4" /> View
                       </a>
-                      <p className="mt-2 text-sm uppercase tracking-[0.2em] text-slate-500">{r.type}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
                       <button
                         type="button"
                         onClick={() => handleDelete(r.id)}
-                        className="rounded-2xl bg-rose-100 px-4 py-2 text-xs font-bold uppercase tracking-[0.15em] text-rose-700 hover:bg-rose-200 transition"
+                        className="h-12 w-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition-all active:scale-90"
                       >
-                        Delete
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                      <span className="rounded-full bg-white border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
-                        View
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -184,3 +239,4 @@ export default function MedicalReportsPage() {
     </div>
   );
 }
+
