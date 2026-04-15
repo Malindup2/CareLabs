@@ -265,4 +265,32 @@ public class DoctorService {
 
         return doctorRepository.save(doctor);
     }
+
+    public void deleteDoctor(UUID id) {
+        Doctor doctor = getDoctorById(id);
+        
+        // 1. Delete Availabilities
+        List<Availability> availabilities = availabilityRepository.findByDoctorId(id);
+        availabilityRepository.deleteAll(availabilities);
+        
+        // 2. Delete Leaves
+        List<DoctorLeave> leaves = leaveRepository.findByDoctorId(id);
+        leaveRepository.deleteAll(leaves);
+        
+        // 3. Delete Documents (and Cloudinary files)
+        List<DoctorDocument> documents = documentRepository.findByDoctorId(id);
+        for (DoctorDocument doc : documents) {
+            try {
+                if (doc.getPublicId() != null) {
+                    cloudinaryService.deleteFile(doc.getPublicId());
+                }
+            } catch (Exception e) {
+                // Log error but continue
+            }
+        }
+        documentRepository.deleteAll(documents);
+        
+        // 4. Finally, delete the doctor record
+        doctorRepository.delete(doctor);
+    }
 }

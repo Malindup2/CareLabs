@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Activity } from "lucide-react";
 import { clearAuth, getRole, getToken } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import NotificationBell from "./NotificationBell";
 
 export default function PublicNavbar() {
   const router = useRouter();
@@ -65,17 +66,16 @@ export default function PublicNavbar() {
           <div className="hidden md:flex items-center gap-4">
             {isAuthenticated ? (
               <>
-                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-1 rounded">
                   {role || "User"}
                 </span>
-                {role === "PATIENT" && (
-                  <Link
-                    href="/patient/dashboard"
-                    className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-3 py-2 rounded-full transition-colors"
-                  >
-                    Dashboard
-                  </Link>
-                )}
+                <Link
+                  href={role === "DOCTOR" ? "/doctor/dashboard" : role === "PATIENT" ? "/patient/dashboard" : "/admin/dashboard"}
+                  className="text-sm font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-all"
+                >
+                  Dashboard
+                </Link>
+                <NotificationBell />
                 <button
                   type="button"
                   onClick={handleLogout}

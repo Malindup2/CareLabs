@@ -39,6 +39,7 @@ import {
   ChevronDown,
   FileDigit,
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 import Modal from "@/components/Modal";
 import {
   apiDeleteAuth,
@@ -247,6 +248,7 @@ export default function DoctorDashboardPage() {
   });
 
   const [appointmentSearch, setAppointmentSearch] = useState("");
+  const [earningsSearchQuery, setEarningsSearchQuery] = useState("");
   const [appointmentFilterStatus, setAppointmentFilterStatus] = useState<AppointmentStatus | "ALL">("ALL");
   const [activeClinicalAppointmentId, setActiveClinicalAppointmentId] = useState<string | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -261,13 +263,15 @@ export default function DoctorDashboardPage() {
   }, [appointments]);
 
   const filteredAppointments = useMemo(() => {
-    return appointments.filter((a) => {
-      const matchesSearch =
-        (a.patientFullName || "").toLowerCase().includes(appointmentSearch.toLowerCase()) ||
-        a.id?.toLowerCase().includes(appointmentSearch.toLowerCase());
-      const matchesStatus = appointmentFilterStatus === "ALL" || a.status === appointmentFilterStatus;
-      return matchesSearch && matchesStatus;
-    });
+    return appointments
+      .filter((a) => {
+        const matchesSearch =
+          (a.patientFullName || "").toLowerCase().includes(appointmentSearch.toLowerCase()) ||
+          a.id?.toLowerCase().includes(appointmentSearch.toLowerCase());
+        const matchesStatus = appointmentFilterStatus === "ALL" || a.status === appointmentFilterStatus;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => new Date(b.appointmentTime).getTime() - new Date(a.appointmentTime).getTime());
   }, [appointments, appointmentSearch, appointmentFilterStatus]);
   const completedAppointments = useMemo(() => appointments.filter((a) => a.status === "COMPLETED"), [appointments]);
 
@@ -299,6 +303,15 @@ export default function DoctorDashboardPage() {
     const estimatedNet = gross * 0.9;
     return { gross, upcomingValue, estimatedNet };
   }, [appointments, completedAppointments]);
+
+  const filteredEarnings = useMemo(() => {
+    return completedAppointments.filter((a) => {
+      const matchesSearch =
+        (a.patientFullName || "").toLowerCase().includes(earningsSearchQuery.toLowerCase()) ||
+        a.type.toLowerCase().includes(earningsSearchQuery.toLowerCase());
+      return matchesSearch;
+    });
+  }, [completedAppointments, earningsSearchQuery]);
 
   const appointmentMix = useMemo(() => {
     const telemedicine = appointments.filter((a) => a.type === "TELEMEDICINE").length;
@@ -374,7 +387,7 @@ export default function DoctorDashboardPage() {
     const currentMonth = now.getMonth();
     
     const weeklyGroups = Array.from({ length: 5 }, () => [] as Appointment[]);
-    appointments.forEach((a) => {
+    completedAppointments.forEach((a) => {
       const d = new Date(a.appointmentTime);
       if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
         const day = d.getDate();
@@ -387,9 +400,9 @@ export default function DoctorDashboardPage() {
       { label: "Week 1", value: weeklyGroups[0].reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
       { label: "Week 2", value: weeklyGroups[1].reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
       { label: "Week 3", value: weeklyGroups[2].reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
-      { label: "Week 4", value: (weeklyGroups[3].concat(weeklyGroups[4])).reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
+      { label: "Week 4+", value: (weeklyGroups[3].concat(weeklyGroups[4])).reduce((sum, a) => sum + (a.consultationFee || 1500), 0) },
     ];
-  }, [appointments]);
+  }, [completedAppointments]);
 
   const maxWeeklyRevenue = Math.max(...weeklyRevenue.map(w => w.value), 1000);
 
@@ -410,6 +423,15 @@ export default function DoctorDashboardPage() {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Auto-refresh appointments every 30 seconds to pick up payment confirmations
+  useEffect(() => {
+    if (!token || !profile?.id) return;
+    const pollTimer = setInterval(() => {
+        void refreshAppointments();
+    }, 30000);
+    return () => clearInterval(pollTimer);
+  }, [token, profile?.id]);
 
   useEffect(() => {
     if (!token) return;
@@ -574,6 +596,60 @@ export default function DoctorDashboardPage() {
     }
   };
 
+  useEffect(() => {
+    if (isNoteModalOpen && selectedAppointmentId && token) {
+      const fetchCurrentNote = async () => {
+        try {
+          const existing = await apiGetAuth<ConsultationNote>(`/appointments/${selectedAppointmentId}/notes`, token);
+          if (existing) {
+            setConsultationNote({
+              chiefComplaint: existing.chiefComplaint || "",
+              clinicalNotes: existing.clinicalNotes || "",
+              diagnosis: existing.diagnosis || "",
+            });
+          } else {
+            setConsultationNote({ chiefComplaint: "", clinicalNotes: "", diagnosis: "" });
+          }
+        } catch (err) {
+          // Record doesn't exist yet, reset form
+          setConsultationNote({ chiefComplaint: "", clinicalNotes: "", diagnosis: "" });
+        }
+      };
+      void fetchCurrentNote();
+    }
+  }, [isNoteModalOpen, selectedAppointmentId, token]);
+
+  useEffect(() => {
+    if (isRxModalOpen && selectedAppointmentId && token) {
+      const fetchCurrentRx = async () => {
+        try {
+          const existing = await apiGetAuth<Prescription>(`/appointments/${selectedAppointmentId}/prescriptions`, token);
+          if (existing) {
+            setPrescriptionPayload({
+              validUntil: existing.validUntil || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              notes: existing.notes || "",
+              items: existing.items || [],
+            });
+          } else {
+            setPrescriptionPayload({
+              validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              notes: "",
+              items: [],
+            });
+          }
+        } catch (err) {
+          // Record doesn't exist yet, reset form
+          setPrescriptionPayload({
+            validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            notes: "",
+            items: [],
+          });
+        }
+      };
+      void fetchCurrentRx();
+    }
+  }, [isRxModalOpen, selectedAppointmentId, token]);
+
   const handleProfileImageUpload = async (e: FormEvent) => {
     e.preventDefault();
     if (!token || !profileImageFile) {
@@ -708,8 +784,11 @@ export default function DoctorDashboardPage() {
     }
   };
 
-  const handleStatusUpdate = async () => {
-    if (!token || !selectedAppointmentId) {
+  const handleStatusUpdate = async (id?: string, status?: AppointmentStatus) => {
+    const targetId = id || selectedAppointmentId;
+    const targetStatus = status || statusToSet;
+
+    if (!token || !targetId) {
       toast.error("Select an appointment first.");
       return;
     }
@@ -719,13 +798,14 @@ export default function DoctorDashboardPage() {
       return;
     }
 
+    const loadingToast = toast.loading(`Updating status to ${targetStatus}...`);
     try {
-      await apiPutAuth<Appointment>(`/appointments/${selectedAppointmentId}/status?status=${statusToSet}`, {}, token);
+      await apiPutAuth<Appointment>(`/appointments/${targetId}/status?status=${targetStatus}`, {}, token);
       await refreshAppointments();
-      toast.success("Appointment status updated.");
+      toast.success(`Appointment marked as ${targetStatus}.`, { id: loadingToast });
     } catch (err: unknown) {
       const e = err as { message?: string };
-      toast.error(e.message || "Unable to update appointment status");
+      toast.error(e.message || "Unable to update appointment status", { id: loadingToast });
     }
   };
 
@@ -937,6 +1017,47 @@ export default function DoctorDashboardPage() {
     toast.success("Clinical PDF report generated.");
   };
 
+  const handleDownloadEarningsPDF = () => {
+    if (filteredEarnings.length === 0) {
+      toast.error("No transactional records to export.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    const doctorName = profile?.fullName || "Consultant";
+    
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(30, 41, 59);
+    doc.text("CareLabs Financial Ledger", 14, 22);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Doctor: Dr. ${doctorName}`, 14, 30);
+    doc.text(`Export Date: ${new Date().toLocaleString()}`, 14, 35);
+    doc.text(`Total Revenue: LKR ${earnings.gross.toLocaleString()}`, 14, 40);
+    doc.text(`Net Wallet: LKR ${earnings.estimatedNet.toLocaleString()}`, 14, 45);
+    
+    autoTable(doc, {
+      startY: 55,
+      head: [["Date & Time", "Patient", "Consultation Type", "Status", "Credit (LKR)"]],
+      body: filteredEarnings.map(a => [
+        new Date(a.appointmentTime).toLocaleString(),
+        a.patientFullName || "Unregistered",
+        a.type,
+        "Settled",
+        (a.consultationFee || 1500).toLocaleString()
+      ]),
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
+      bodyStyles: { textColor: [51, 65, 85] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 55 },
+    });
+
+    doc.save(`CareLabs_Earnings_${new Date().toISOString().split("T")[0]}.pdf`);
+    toast.success("Financial PDF report generated.");
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-50 flex">
@@ -1096,6 +1217,7 @@ export default function DoctorDashboardPage() {
                 VERIFICATION: {profile.verificationStatus}
               </div>
             )}
+            <NotificationBell />
             <button
               onClick={() => setShowLogoutConfirm(true)}
               className="px-3 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition"
@@ -1242,16 +1364,16 @@ export default function DoctorDashboardPage() {
                      </div>
                      <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-2xl border border-slate-100">
                         <span className="h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] animate-pulse" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Real-time Vault</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Vault: {formatLkr(earnings.gross)}</span>
                      </div>
                    </div>
                    
-                   <div className="h-64 flex items-end gap-4 px-2 pt-4">
+                   <div className="h-64 flex items-end gap-4 px-2 pt-10">
                      {weeklyRevenue.map((w) => {
-                       const h = Math.max(12, Math.round((w.value / maxWeeklyRevenue) * 100));
+                       const h = Math.max(8, Math.round((w.value / maxWeeklyRevenue) * 100));
                        return (
-                         <div key={w.label} className="flex-1 flex flex-col items-center group/bar">
-                           <div className="w-full relative">
+                         <div key={w.label} className="flex-1 h-full flex flex-col items-center group/bar">
+                           <div className="w-full h-full relative flex items-end">
                              <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover/bar:opacity-100 transition-all scale-75 group-hover/bar:scale-100 whitespace-nowrap z-10 shadow-xl">
                                {formatLkr(w.value)}
                              </div>
@@ -1318,17 +1440,38 @@ export default function DoctorDashboardPage() {
             </div>
 
             <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
                    <div>
                      <h2 className="text-xl font-bold text-slate-900 leading-tight">Ledger Logs</h2>
                      <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1">Activity Statement</p>
                    </div>
-                   <button 
-                      onClick={handleDownloadCSV}
-                      className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 transition-all active:scale-95"
-                    >
-                      Download CSV
-                    </button>
+                   
+                   <div className="flex flex-1 min-w-[300px] items-center gap-4">
+                      <div className="relative flex-1 group">
+                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                         <input 
+                           type="text" 
+                           placeholder="Search ledger by patient or type..." 
+                           value={earningsSearchQuery}
+                           onChange={(e) => setEarningsSearchQuery(e.target.value)}
+                           className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                         />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={handleDownloadCSV}
+                          className="px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 transition-all active:scale-95 flex items-center gap-2"
+                        >
+                          <Download className="w-3.5 h-3.5" /> CSV
+                        </button>
+                        <button 
+                          onClick={handleDownloadEarningsPDF}
+                          className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2 shadow-lg shadow-slate-200"
+                        >
+                          <FileText className="w-3.5 h-3.5" /> PDF
+                        </button>
+                      </div>
+                   </div>
                 </div>
                 
                 <div className="overflow-x-auto">
@@ -1342,7 +1485,7 @@ export default function DoctorDashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {completedAppointments.map((a) => (
+                        {filteredEarnings.map((a) => (
                           <tr key={a.id} className="group hover:bg-slate-50/50 transition-colors">
                             <td className="py-4 px-2 font-mono text-[10px] text-slate-400 group-hover:text-slate-900 transition-colors">{new Date(a.appointmentTime).toLocaleString()}</td>
                             <td className="py-4 px-2 uppercase tracking-tight">{a.type}</td>
@@ -1357,7 +1500,7 @@ export default function DoctorDashboardPage() {
                       </tbody>
                     </table>
                 </div>
-                {completedAppointments.length === 0 && (
+                {filteredEarnings.length === 0 && (
                   <div className="py-20 flex flex-col items-center justify-center text-center opacity-50">
                      <DollarSign className="w-12 h-12 text-slate-300 mb-4" />
                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No Transactional Records</p>
@@ -1761,6 +1904,13 @@ export default function DoctorDashboardPage() {
         {activeTab === "appointments" && (
           <div className="space-y-6">
             <div className="bg-white border border-slate-200 rounded-[2.5rem] p-6 shadow-sm flex flex-wrap items-center justify-between gap-6">
+               <div className="flex flex-col">
+                  <h2 className="text-xl font-bold text-slate-900 leading-tight">Patient Records</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Live Connection Active</p>
+                  </div>
+               </div>
                <div className="flex flex-1 min-w-[300px] items-center gap-4">
                   <div className="relative flex-1 group">
                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
@@ -1831,7 +1981,8 @@ export default function DoctorDashboardPage() {
                                ACCEPTED: "bg-indigo-100 text-indigo-700",
                                COMPLETED: "bg-emerald-100 text-emerald-700",
                                CANCELLED: "bg-slate-100 text-slate-500",
-                               REJECTED: "bg-rose-100 text-rose-700"
+                               REJECTED: "bg-rose-100 text-rose-700",
+                               NO_SHOW: "bg-orange-100 text-orange-700"
                              };
                              const isSelected = selectedAppointmentId === a.id;
                              
@@ -1864,12 +2015,55 @@ export default function DoctorDashboardPage() {
                                      <p className="text-xs font-bold text-slate-600 line-clamp-1 max-w-[200px]">{a.reason || "General Consultation Request"}</p>
                                   </td>
                                   <td className="px-6 py-6">
-                                     <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest whitespace-nowrap ${statusColors[a.status] || "bg-slate-100"}`}>
-                                        {a.status}
-                                     </span>
+                                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest whitespace-nowrap ${statusColors[a.status] || "bg-slate-100"}`}>
+                                         {a.status.replace("_", " ")}
+                                      </span>
                                   </td>
                                   <td className="px-8 py-6">
                                      <div className="flex items-center justify-end gap-2">
+                                        {/* Status Management Actions */}
+                                        {a.status === "CONFIRMED" && (
+                                          <>
+                                            <button 
+                                              onClick={() => handleStatusUpdate(a.id, "ACCEPTED")}
+                                              disabled={!canConsult}
+                                              className="p-2.5 rounded-xl border border-emerald-100 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all active:scale-95 disabled:opacity-30"
+                                              title="Accept Appointment"
+                                            >
+                                              <CheckCircle2 className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                              onClick={() => handleStatusUpdate(a.id, "REJECTED")}
+                                              disabled={!canConsult}
+                                              className="p-2.5 rounded-xl border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white transition-all active:scale-95 disabled:opacity-30"
+                                              title="Reject Appointment"
+                                            >
+                                              <XCircle className="w-4 h-4" />
+                                            </button>
+                                          </>
+                                        )}
+
+                                        {a.status === "ACCEPTED" && (
+                                          <>
+                                            <button 
+                                              onClick={() => handleStatusUpdate(a.id, "COMPLETED")}
+                                              disabled={!canConsult}
+                                              className="p-2.5 rounded-xl border border-indigo-100 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-all active:scale-95 disabled:opacity-30"
+                                              title="Mark as Completed"
+                                            >
+                                              <CheckCircle2 className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                              onClick={() => handleStatusUpdate(a.id, "NO_SHOW")}
+                                              disabled={!canConsult}
+                                              className="p-2.5 rounded-xl border border-amber-100 text-amber-500 hover:bg-amber-500 hover:text-white transition-all active:scale-95 disabled:opacity-30"
+                                              title="Mark as No Show"
+                                            >
+                                              <ShieldAlert className="w-4 h-4" />
+                                            </button>
+                                          </>
+                                        )}
+
                                         {a.type === "TELEMEDICINE" && (() => {
                                            const canJoin = a.status === "CONFIRMED" || a.status === "ACCEPTED";
                                            const isThisLoading = meetingLoading && selectedAppointmentId === a.id;
@@ -2029,7 +2223,7 @@ export default function DoctorDashboardPage() {
       <ConfirmDialog
         open={showLogoutConfirm}
         title="Confirm Logout"
-        message="Are you sure you want to logout?"
+        message="Are you sure you want to logout? Your secure session will be terminated."
         cancelLabel="Cancel"
         confirmLabel="Yes, Logout"
         onCancel={() => setShowLogoutConfirm(false)}

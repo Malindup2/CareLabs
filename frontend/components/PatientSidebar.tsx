@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, FileText, AlertTriangle, BookOpen, Stethoscope, Video } from "lucide-react";
+import { User, FileText, AlertTriangle, BookOpen, Stethoscope, Video, Search } from "lucide-react";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/patient/dashboard", icon: <Stethoscope className="w-5 h-5" /> },
@@ -10,6 +10,7 @@ const sidebarItems = [
   { label: "Profile", href: "/patient/profile", icon: <User className="w-5 h-5" /> },
   { label: "Medical History", href: "/patient/medical-history", icon: <BookOpen className="w-5 h-5" /> },
   { label: "Allergies", href: "/patient/allergies", icon: <AlertTriangle className="w-5 h-5" /> },
+  { label: "Find Doctors", href: "/doctors", icon: <Search className="w-5 h-5" /> },
   { label: "Medical Reports", href: "/patient/reports", icon: <FileText className="w-5 h-5" /> },
 ];
 
@@ -17,7 +18,7 @@ export default function PatientSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 hidden md:flex shrink-0 flex-col" suppressHydrationWarning>
+    <aside className="w-64 bg-slate-900 border-r border-slate-800 hidden md:flex shrink-0 flex-col h-screen sticky top-0" suppressHydrationWarning>
       <div className="p-6 border-b border-slate-800">
         <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
            <div className="h-10 w-10 overflow-hidden rounded-xl flex items-center justify-center">

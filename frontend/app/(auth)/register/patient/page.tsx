@@ -80,7 +80,7 @@ export default function PatientRegisterPage() {
       } else {
         toast.success("Patient account created successfully!");
       }
-      router.push("/login");
+      router.push("/");
     } catch (err: unknown) {
       const error = err as { message?: string };
       toast.error(error.message || "Registration failed. Please try again.");

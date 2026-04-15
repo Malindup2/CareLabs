@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Stethoscope,
   TrendingUp,
+  Plus,
 } from "lucide-react";
 import { apiGetAuth, clearAuth, getToken } from "@/lib/api";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -38,7 +39,6 @@ export default function PatientDashboardPage() {
   const [patient, setPatient] = useState<PatientProfile | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [now, setNow] = useState(new Date());
   const token = getToken();
 
@@ -158,12 +158,21 @@ export default function PatientDashboardPage() {
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Care Pipeline</h2>
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1">Upcoming Clinical Sessions</p>
             </div>
-            <Link
-              href="/appointments"
-              className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 transition-all active:scale-95"
-            >
-              View Full Schedule
-            </Link>
+            <div className="flex gap-2">
+              <Link
+                href="/doctors"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                Book New
+              </Link>
+              <Link
+                href="/appointments"
+                className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 transition-all active:scale-95"
+              >
+                View Full Schedule
+              </Link>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -230,7 +239,7 @@ export default function PatientDashboardPage() {
                   Quickly assess your symptoms using our advanced clinical AI to find the right specialist.
                 </p>
                 <Link
-                  href="/patient/ai-assessment"
+                  href="#ai"
                   className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-indigo-700 transition shadow-lg shadow-indigo-500/20"
                 >
                   Start Assessment <ArrowRight className="w-3 h-3" />
@@ -269,19 +278,6 @@ export default function PatientDashboardPage() {
         </div>
       </div>
 
-      <ConfirmDialog
-        open={showLogoutConfirm}
-        title="Confirm Logout"
-        message="Are you sure you want to logout? Your secure session will be terminated."
-        cancelLabel="Cancel"
-        confirmLabel="Yes, Terminate Session"
-        onCancel={() => setShowLogoutConfirm(false)}
-        onConfirm={() => {
-          setShowLogoutConfirm(false);
-          clearAuth();
-          router.replace("/login");
-        }}
-      />
     </div>
   );
 }

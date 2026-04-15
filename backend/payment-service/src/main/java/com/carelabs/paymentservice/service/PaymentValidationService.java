@@ -18,7 +18,7 @@ public class PaymentValidationService {
 
     private final RestTemplate restTemplate;
 
-    @Value("${integration.appointments-service.base-url:http://appointments-service:8084}")
+    @Value("${integration.appointments-service.base-url:http://localhost:8084}")
     private String appointmentsServiceBaseUrl;
 
     public PaymentValidationService() {

@@ -11,10 +11,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class SymptomCheckService {
 
     @Value("${gemini.api.url:}")
@@ -61,7 +64,8 @@ public class SymptomCheckService {
                     .build();
 
         } catch (Exception e) {
-            return buildFallbackResponse();
+            log.error("Symptom analysis failed: {}", e.getMessage(), e);
+            return buildFallbackResponse(e.getMessage());
         }
     }
 
@@ -305,7 +309,7 @@ public class SymptomCheckService {
                     .result(parsed.getResult())
                     .confidenceScore(confidence)
                     .recommendedSpecialty(specialty)
-                    .symptomQuery(true)
+                    .symptomQuery(parsed.isSymptomQuery())
                     .build();
 
         } catch (JsonProcessingException e) {
@@ -348,9 +352,16 @@ public class SymptomCheckService {
                 .build();
     }
 
-    private SymptomCheckResponse buildFallbackResponse() {
+    private SymptomCheckResponse buildFallbackResponse(String error) {
+        String msg = "Sorry, I couldn't analyze your symptoms at the moment. ";
+        if (error != null && (error.contains("401") || error.contains("403") || error.contains("Key"))) {
+            msg += "(Connection Issue: Security/Key). ";
+        } else if (error != null && error.contains("429")) {
+            msg += "(Connection Issue: Quota). ";
+        }
+        
         return SymptomCheckResponse.builder()
-                .result("Sorry, I couldn't analyze your symptoms at the moment. This is only a preliminary AI service and not a diagnosis. Please try again later or consult a General Physician.")
+                .result(msg + "This is only a preliminary AI service and not a diagnosis. Please try again later or consult a General Physician.")
                 .confidenceScore(50.0)
                 .recommendedSpecialty("General Physician")
                 .build();

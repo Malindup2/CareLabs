@@ -38,4 +38,16 @@ public class InternalUserController {
                         .build()))
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    @GetMapping("/users")
+    public ResponseEntity<java.util.List<UserDto>> getAllUsers() {
+        return ResponseEntity.ok(userRepository.findAll().stream()
+                .map(user -> UserDto.builder()
+                        .id(user.getId())
+                        .email(user.getEmail())
+                        .role(user.getRole())
+                        .enabled(user.getEnabled())
+                        .build())
+                .collect(java.util.stream.Collectors.toList()));
+    }
 }
