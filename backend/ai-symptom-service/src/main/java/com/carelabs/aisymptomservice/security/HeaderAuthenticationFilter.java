@@ -26,17 +26,25 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
         String role = request.getHeader("X-Auth-Role");
 
         if (userId != null && !userId.isBlank() && role != null && !role.isBlank()) {
-            SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
+            try {
+                // Validate that userId is a valid UUID format before setting authentication
+                java.util.UUID.fromString(userId);
+                
+                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
 
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            userId,
-                            null,
-                            Collections.singletonList(authority)
-                    );
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userId,
+                                null,
+                                Collections.singletonList(authority)
+                        );
 
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            } catch (IllegalArgumentException e) {
+                // Invalid UUID format in header, skip setting authentication
+                // This will be caught by @PreAuthorize annotation in the controller
+            }
         }
 
         filterChain.doFilter(request, response);

@@ -110,6 +110,14 @@ public class NotificationService {
         return toResponse(notificationRepository.save(notification));
     }
 
+    /** Deletes a notification from history */
+    public void deleteNotification(UUID notificationId) {
+        if (!notificationRepository.existsById(notificationId)) {
+            throw new RuntimeException("Notification not found with id: " + notificationId);
+        }
+        notificationRepository.deleteById(notificationId);
+    }
+
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
     /**
@@ -171,7 +179,65 @@ public class NotificationService {
                                         + data.getOrDefault("rejectionReason", "");
             case PAYOUT_PROCESSED      -> "Payout of " + data.getOrDefault("currency", "LKR") + " "
                                         + data.getOrDefault("amount", "") + " processed to your bank.";
+            case ANNOUNCEMENT          -> "System Announcement: " + data.getOrDefault("title", "Update");
         };
+    }
+
+    /**
+     * Sends a broadcast announcement to multiple users based on their role.
+     * Called by Admin broadcast UI.
+     */
+    public void broadcastNotification(com.carelabs.notificationservice.dto.BroadcastRequest request) {
+        log.info("Broadcasting notification: title='{}', targetRole={}", request.getTitle(), request.getTargetRole());
+        
+        List<UserEmailDto> allUsers = userLookupService.getAllUsers();
+        
+        List<UserEmailDto> targets = allUsers.stream()
+                .filter(u -> request.getTargetRole().equalsIgnoreCase("ALL") || 
+                            u.getRole().equalsIgnoreCase(request.getTargetRole()))
+                .collect(Collectors.toList());
+
+        log.info("Found {} targets for broadcast", targets.size());
+
+        for (UserEmailDto target : targets) {
+            if (target.getEmail() == null) continue;
+
+            try {
+                // We use a generic subject and HTML body for broadcasts
+                String subject = " CareLabs Announcement: " + request.getTitle();
+                
+                // Simple HTML body for broadcast
+                String htmlBody = String.format(
+                    "<div style='font-family: sans-serif; padding: 20px; color: #334155;'>" +
+                    "<h2 style='color: #2563eb;'>%s</h2>" +
+                    "<p style='font-size: 16px; line-height: 1.6;'>%s</p>" +
+                    "<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;'>" +
+                    "<p style='font-size: 12px; color: #94a3b8;'>You received this because you are a registered %s on CareLabs.</p>" +
+                    "</div>",
+                    request.getTitle(),
+                    request.getMessage(),
+                    target.getRole()
+                );
+
+                emailService.sendHtmlEmail(target.getEmail(), subject, htmlBody);
+                
+                // Save a record in notification history
+                Notification n = Notification.builder()
+                        .userId(target.getId())
+                        .type(NotificationType.EMAIL)
+                        .event(com.carelabs.notificationservice.enums.NotificationEvent.ANNOUNCEMENT)
+                        .title(request.getTitle())
+                        .message(request.getMessage())
+                        .recipientEmail(target.getEmail())
+                        .status(NotificationStatus.SENT)
+                        .read(false)
+                        .build();
+                notificationRepository.save(n);
+
+            } catch (Exception e) {
+                log.error("Failed to send broadcast email to {}: {}", target.getEmail(), e.getMessage());
+            }
+        }
     }
 
     private NotificationResponse toResponse(Notification n) {

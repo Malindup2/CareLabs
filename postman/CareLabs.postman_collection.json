@@ -77,6 +77,20 @@
 				},
 				{
 					"name": "Get My Profile",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.id) {",
+									"  pm.environment.set(\"patientId\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [],
@@ -105,13 +119,30 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n    \"patientId\": \"{{patientId}}\",\r\n    \"doctorId\": \"{{doctorId}}\",\r\n    \"appointmentTime\": \"2024-05-20T10:00:00\"\r\n}",
+							"raw": "{\r\n    \"patientId\": \"{{patientId}}\",\r\n    \"doctorId\": \"{{doctorId}}\",\r\n    \"appointmentTime\": \"2026-04-20T10:00:00\",\r\n    \"type\": \"TELEMEDICINE\",\r\n    \"reason\": \"Routine consultation\"\r\n}",
 							"options": {
 								"raw": {
 									"language": "json"
 								}
 							}
 						},
+						"event": [
+							{
+								"listen": "test",
+								"script": {
+									"exec": [
+										"var jsonData = pm.response.json();",
+										"if (jsonData && jsonData.id) {",
+										"  pm.environment.set(\"appointmentId\", jsonData.id);",
+										"}",
+										"if (jsonData && jsonData.consultationFee) {",
+										"  pm.environment.set(\"appointmentFee\", String(jsonData.consultationFee));",
+										"}"
+									],
+									"type": "text/javascript"
+								}
+							}
+						],
 						"url": {
 							"raw": "{{baseUrl}}/appointments",
 							"host": [
@@ -223,6 +254,23 @@
 			"item": [
 				{
 					"name": "Initiate Checkout",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.orderId) {",
+									"  pm.environment.set(\"orderId\", jsonData.orderId);",
+									"}",
+									"if (jsonData && jsonData.amount) {",
+									"  pm.environment.set(\"paymentAmount\", String(jsonData.amount));",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -237,6 +285,65 @@
 						},
 						"url": {
 							"raw": "{{baseUrl}}/payments/initiate",
+					{
+						"name": "Webhook: Payment Notify",
+						"event": [
+							{
+								"listen": "prerequest",
+								"script": {
+									"exec": [
+										"var merchantId = pm.environment.get('payhereMerchantId');",
+										"var merchantSecret = pm.environment.get('payhereMerchantSecret');",
+										"var orderId = pm.environment.get('orderId');",
+										"var amount = pm.environment.get('paymentAmount') || '1500.00';",
+										"var currency = pm.environment.get('payhereCurrency') || 'LKR';",
+										"var statusCode = pm.environment.get('paymentStatusCode') || '2';",
+										"var paymentId = pm.environment.get('paymentId') || 'PAYHERE_TEST_TXN';",
+										"var method = pm.environment.get('paymentMethod') || 'CARD';",
+										"var secretHash = CryptoJS.MD5(merchantSecret).toString(CryptoJS.enc.Hex).toUpperCase();",
+										"var md5sig = CryptoJS.MD5(merchantId + orderId + amount + currency + statusCode + secretHash).toString(CryptoJS.enc.Hex).toUpperCase();",
+										"pm.environment.set('md5sig', md5sig);",
+										"pm.environment.set('paymentId', paymentId);",
+										"pm.environment.set('paymentMethod', method);"
+									],
+									"type": "text/javascript"
+								}
+							}
+						],
+						"request": {
+							"method": "POST",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/x-www-form-urlencoded"
+								}
+							],
+							"body": {
+								"mode": "urlencoded",
+								"urlencoded": [
+									{ "key": "merchant_id", "value": "{{payhereMerchantId}}" },
+									{ "key": "order_id", "value": "{{orderId}}" },
+									{ "key": "payment_id", "value": "{{paymentId}}" },
+									{ "key": "payhere_amount", "value": "{{paymentAmount}}" },
+									{ "key": "payhere_currency", "value": "{{payhereCurrency}}" },
+									{ "key": "status_code", "value": "{{paymentStatusCode}}" },
+									{ "key": "md5sig", "value": "{{md5sig}}" },
+									{ "key": "method", "value": "{{paymentMethod}}" }
+								]
+							},
+							"url": {
+								"raw": "{{baseUrl}}/payments/notify",
+								"host": [
+									"{{baseUrl}}"
+								],
+								"path": [
+									"payments",
+									"notify"
+								]
+							}
+						},
+						"response": []
+					},
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -281,6 +388,241 @@
 								"payments",
 								"admin",
 								"transactions"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Doctor Service",
+			"item": [
+				{
+					"name": "Search Doctors",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/doctors?specialty=Cardiology",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors"
+							],
+							"query": [
+								{
+									"key": "specialty",
+									"value": "Cardiology"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Doctor by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/doctors/{{doctorId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors",
+								"{{doctorId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Profile (Doctor)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData && jsonData.id) {",
+									"  pm.environment.set(\"doctorId\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/doctors/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors",
+								"me"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update My Profile",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"fullName\": \"Dr. John Smith\",\r\n    \"specialty\": \"Cardiology\",\r\n    \"bio\": \"Experienced cardiologist with 10+ years in the field.\",\r\n    \"experienceYears\": 12,\r\n    \"consultationFee\": 5000.00,\r\n    \"qualification\": \"MBBS, MD\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/doctors/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors",
+								"me"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Document",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "type",
+									"value": "LICENSE",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/doctors/documents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors",
+								"documents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Documents",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/doctors/documents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors",
+								"documents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Availability",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"dayOfWeek\": \"MONDAY\",\r\n    \"startTime\": \"09:00:00\",\r\n    \"endTime\": \"12:00:00\",\r\n    \"slotDuration\": 30\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/doctors/availability",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors",
+								"availability"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Leave",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"leaveDate\": \"2024-12-25\",\r\n    \"reason\": \"Christmas Holiday\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/doctors/leave",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors",
+								"leave"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Admin: Verify Doctor",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/doctors/{{doctorId}}/verify?status=APPROVED",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"doctors",
+								"{{doctorId}}",
+								"verify"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "APPROVED"
+								}
 							]
 						}
 					},
@@ -348,6 +690,51 @@
 		{
 			"key": "orderId",
 			"value": "ENTER_UUID_HERE",
+			"type": "string"
+		},
+		{
+			"key": "appointmentFee",
+			"value": "1500.00",
+			"type": "string"
+		},
+		{
+			"key": "payhereMerchantId",
+			"value": "1234826",
+			"type": "string"
+		},
+		{
+			"key": "payhereMerchantSecret",
+			"value": "REPLACE_WITH_REAL_SECRET_IN_ENV",
+			"type": "string"
+		},
+		{
+			"key": "payhereCurrency",
+			"value": "LKR",
+			"type": "string"
+		},
+		{
+			"key": "paymentStatusCode",
+			"value": "2",
+			"type": "string"
+		},
+		{
+			"key": "paymentId",
+			"value": "PAYHERE_TEST_TXN",
+			"type": "string"
+		},
+		{
+			"key": "paymentAmount",
+			"value": "1500.00",
+			"type": "string"
+		},
+		{
+			"key": "paymentMethod",
+			"value": "CARD",
+			"type": "string"
+		},
+		{
+			"key": "md5sig",
+			"value": "",
 			"type": "string"
 		}
 	]

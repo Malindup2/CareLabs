@@ -38,6 +38,12 @@ public class PatientController {
         return patientService.getMyProfile(userId);
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DOCTOR')")
+    @GetMapping("/internal/{userId}")
+    public PatientProfileResponse getPatientProfile(@PathVariable UUID userId) {
+        return patientService.getMyProfile(userId);
+    }
+
     @PreAuthorize("hasRole('PATIENT')")
     @PutMapping("/me")
     public PatientProfileResponse updateMyProfile(@Valid @RequestBody UpdatePatientProfileRequest request) {
@@ -113,5 +119,17 @@ public class PatientController {
     public MedicalHistoryResponse getMedicalHistory() {
         UUID userId = currentUserService.getCurrentUserId();
         return patientService.getMedicalHistory(userId);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping
+    public List<PatientProfileResponse> getAllPatients() {
+        return patientService.getAllPatients();
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @DeleteMapping("/admin/{id}")
+    public void deletePatientForAdmin(@PathVariable UUID id) {
+        patientService.deletePatient(id);
     }
 }

@@ -21,16 +21,32 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
 
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String userId = request.getHeader("X-Auth-User-Id");
+
         String role = request.getHeader("X-Auth-Role");
 
-        if (userId != null && !userId.isEmpty() && role != null) {
-            SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
-            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    userId, null, Collections.singletonList(authority));
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        if (userId != null && !userId.isEmpty() && role != null && !role.isBlank()) {
+            System.out.println("[PAYMENT-SEC] Found headers - UserID: " + userId + " | Role: " + role);
+            try {
+                // Validate that userId is a valid UUID format before setting authentication
+                java.util.UUID.fromString(userId);
+                
+                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        userId, null, Collections.singletonList(authority));
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            } catch (IllegalArgumentException e) {
+                System.err.println("[PAYMENT-SEC] Invalid UUID in X-Auth-User-Id: " + userId);
+            }
+        } else {
+            System.err.println("[PAYMENT-SEC] Missing/Empty Auth Headers downstream. UserID: " + userId + " | Role: " + role);
         }
 
         chain.doFilter(request, response);

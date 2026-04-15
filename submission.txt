@@ -1,0 +1,10 @@
+OFFICIAL SUBMISSION: SE3020 Distributed Systems - Assignment 1
+PROJECT TITLE: CareLabs: AI-Enabled Smart Healthcare Platform
+
+GITHUB REPOSITORY LINK:
+https://github.com/Malindup2/CareLabs
+
+NOTES:
+- The repository contains the full source code for 9 backend microservices and the Next.js frontend.
+- Deployment instructions are provided in the accompanying readme.txt.
+- Database initialization scripts are located in /backend/init-dbs.sql.

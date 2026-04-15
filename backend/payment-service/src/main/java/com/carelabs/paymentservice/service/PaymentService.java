@@ -1,23 +1,29 @@
 package com.carelabs.paymentservice.service;
 
+import com.carelabs.paymentservice.dto.PaymentStatusEvent;
 import com.carelabs.paymentservice.dto.PayHereCheckoutResponse;
 import com.carelabs.paymentservice.dto.PaymentInitRequest;
 import com.carelabs.paymentservice.entity.Payment;
 import com.carelabs.paymentservice.enums.PaymentStatus;
 import com.carelabs.paymentservice.repository.PaymentRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.security.MessageDigest;
 import java.text.DecimalFormat;
 import java.util.UUID;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
+    private final PaymentPricingService paymentPricingService;
+    private final PaymentValidationService paymentValidationService;
 
     @Value("${payhere.merchant-id}")
     private String merchantId;
@@ -31,40 +37,56 @@ public class PaymentService {
     @Value("${payhere.notify-url}")
     private String notifyUrl;
 
-    public PaymentService(PaymentRepository paymentRepository) {
-        this.paymentRepository = paymentRepository;
-    }
+    @Value("${payhere.sandbox:true}")
+    private boolean sandboxMode;
+
+    @Value("${app.frontend-base-url:http://localhost:3000}")
+    private String frontendBaseUrl;
+
+    private final org.springframework.kafka.core.KafkaTemplate<String, PaymentStatusEvent> kafkaTemplate;
 
     public PayHereCheckoutResponse initiatePayment(PaymentInitRequest request) {
+        log.info("Initiating payment for AppointmentID: {}", request.getAppointmentId());
         
-        BigDecimal totalAmount = new BigDecimal("1500.00");
-        BigDecimal platformFee = totalAmount.multiply(new BigDecimal("0.10")).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal doctorEarning = totalAmount.subtract(platformFee);
+        BigDecimal appointmentFee = paymentValidationService.validateAndResolveAppointmentFee(request.getAppointmentId());
 
-        
-        Payment payment = Payment.builder()
-                .appointmentId(request.getAppointmentId())
-                .amount(totalAmount)
-                .platformFee(platformFee)
-                .doctorEarning(doctorEarning)
-                .status(PaymentStatus.PENDING)
-                .currency(currency)
-                .provider("PAYHERE")
-                .build();
-        
-        payment = paymentRepository.save(payment);
+        // Check for existing payment — if patient retries, reuse the same record
+        Payment payment = paymentRepository.findByAppointmentId(request.getAppointmentId())
+                .orElse(null);
+
+        if (payment != null) {
+            log.info("Found existing payment (ID: {}) with status: {}. Resuming checkout.", payment.getId(), payment.getStatus());
+        } else {
+            log.info("No existing payment found. Creating new PENDING record.");
+            BigDecimal totalAmount = paymentPricingService.resolveConsultationFee(appointmentFee);
+            BigDecimal platformFee = paymentPricingService.calculatePlatformFee(totalAmount);
+            BigDecimal doctorEarning = paymentPricingService.calculateDoctorEarning(totalAmount);
+
+            payment = Payment.builder()
+                    .appointmentId(request.getAppointmentId())
+                    .amount(totalAmount)
+                    .platformFee(platformFee)
+                    .doctorEarning(doctorEarning)
+                    .status(PaymentStatus.PENDING)
+                    .currency(currency)
+                    .provider("PAYHERE")
+                    .build();
+            payment = paymentRepository.save(payment);
+        }
+
         String orderId = payment.getId().toString();
 
         //Generate the Secure MD5 Hash
-        String formattedAmount = new DecimalFormat("0.00").format(totalAmount);
+        String formattedAmount = new DecimalFormat("0.00").format(payment.getAmount());
         String hash = generatePayHereHash(merchantId, orderId, formattedAmount, currency, merchantSecret);
 
         //Return the complete package to the React frontend
         return PayHereCheckoutResponse.builder()
                 .merchantId(merchantId)
-                .returnUrl("http://localhost:3000/patient/appointments") 
-                .cancelUrl("http://localhost:3000/patient/checkout") 
+            .returnUrl(frontendBaseUrl + "/patient/appointments")
+            .cancelUrl(frontendBaseUrl + "/patient/appointments")
                 .notifyUrl(notifyUrl) 
+            .checkoutUrl(sandboxMode ? "https://sandbox.payhere.lk/pay/checkout" : "https://www.payhere.lk/pay/checkout")
                 .orderId(orderId)
                 .items("Medical Consultation")
                 .currency(currency)
@@ -135,10 +157,6 @@ public class PaymentService {
             String localMd5sig = sbFinal.toString();
 
             if (!localMd5sig.equalsIgnoreCase(md5sig)) {
-                //added print hash for debugging
-                System.out.println("EXPECTED HASH");
-                System.out.println(localMd5sig);
-                
                 throw new RuntimeException("Signature Failed! Expected: " + localMd5sig + " but got: " + md5sig);
             }
 
@@ -155,6 +173,15 @@ public class PaymentService {
             }
 
             paymentRepository.save(payment);
+            
+            // Publish Kafka Event
+            PaymentStatusEvent event = PaymentStatusEvent.builder()
+                    .appointmentId(payment.getAppointmentId())
+                    .transactionId(payment.getTransactionId())
+                    .status(payment.getStatus().name())
+                    .build();
+            kafkaTemplate.send("payment-events", event);
+            log.info("KAFKA TRAFFIC - Sent PaymentStatusEvent for AppointmentID: {} with status: {}", event.getAppointmentId(), event.getStatus());
             
         } catch (Exception e) {
             throw new RuntimeException(e.getMessage());

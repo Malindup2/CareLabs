@@ -48,4 +48,24 @@ public class NotificationController {
     public ResponseEntity<NotificationResponse> markAsRead(@PathVariable UUID id) {
         return ResponseEntity.ok(notificationService.markAsRead(id));
     }
+
+    /**
+     * Delete a notification.
+     * DELETE /notifications/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteNotification(@PathVariable UUID id) {
+        notificationService.deleteNotification(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Broadcast an announcement to many users.
+     * POST /notifications/broadcast
+     */
+    @PostMapping("/broadcast")
+    public ResponseEntity<Void> broadcast(@RequestBody com.carelabs.notificationservice.dto.BroadcastRequest request) {
+        notificationService.broadcastNotification(request);
+        return ResponseEntity.accepted().build();
+    }
 }
