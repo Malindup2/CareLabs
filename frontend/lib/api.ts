@@ -50,11 +50,16 @@ async function requestJson<T>({ method, endpoint, body, token, isFormData = fals
     throw err;
   }
 
-  if (res.status === 204) {
+  if (res.status === 204 || res.status === 202) {
     return undefined as T;
   }
 
-  return res.json() as Promise<T>;
+  const contentType = res.headers.get("Content-Type");
+  if (contentType && contentType.includes("application/json")) {
+    return res.json() as Promise<T>;
+  }
+
+  return undefined as T;
 }
 
 export async function apiPost<T>(endpoint: string, body: unknown): Promise<T> {

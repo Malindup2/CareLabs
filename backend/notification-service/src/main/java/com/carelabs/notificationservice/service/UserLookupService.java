@@ -47,4 +47,15 @@ public class UserLookupService {
             return null;
         }
     }
+
+    public java.util.List<UserEmailDto> getAllUsers() {
+        String url = authServiceUrl + "/auth/internal/users";
+        try {
+            UserEmailDto[] dtoList = restTemplate.getForObject(url, UserEmailDto[].class);
+            return dtoList != null ? java.util.Arrays.asList(dtoList) : java.util.Collections.emptyList();
+        } catch (RestClientException e) {
+            log.error("Failed to fetch all users from auth-service: {}", e.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
 }

@@ -206,6 +206,12 @@ public class PatientService {
                 .build();
     }
 
+    public List<PatientProfileResponse> getAllPatients() {
+        return patientRepository.findAll().stream()
+                .map(this::mapToPatientProfileResponse)
+                .toList();
+    }
+
     private PatientProfileResponse mapToPatientProfileResponse(Patient patient) {
         return PatientProfileResponse.builder()
                 .id(patient.getId())

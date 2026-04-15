@@ -39,6 +39,7 @@ import {
   ChevronDown,
   FileDigit,
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 import Modal from "@/components/Modal";
 import {
   apiDeleteAuth,
@@ -247,6 +248,7 @@ export default function DoctorDashboardPage() {
   });
 
   const [appointmentSearch, setAppointmentSearch] = useState("");
+  const [earningsSearchQuery, setEarningsSearchQuery] = useState("");
   const [appointmentFilterStatus, setAppointmentFilterStatus] = useState<AppointmentStatus | "ALL">("ALL");
   const [activeClinicalAppointmentId, setActiveClinicalAppointmentId] = useState<string | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -299,6 +301,15 @@ export default function DoctorDashboardPage() {
     const estimatedNet = gross * 0.9;
     return { gross, upcomingValue, estimatedNet };
   }, [appointments, completedAppointments]);
+
+  const filteredEarnings = useMemo(() => {
+    return completedAppointments.filter((a) => {
+      const matchesSearch =
+        (a.patientFullName || "").toLowerCase().includes(earningsSearchQuery.toLowerCase()) ||
+        a.type.toLowerCase().includes(earningsSearchQuery.toLowerCase());
+      return matchesSearch;
+    });
+  }, [completedAppointments, earningsSearchQuery]);
 
   const appointmentMix = useMemo(() => {
     const telemedicine = appointments.filter((a) => a.type === "TELEMEDICINE").length;
@@ -937,6 +948,47 @@ export default function DoctorDashboardPage() {
     toast.success("Clinical PDF report generated.");
   };
 
+  const handleDownloadEarningsPDF = () => {
+    if (filteredEarnings.length === 0) {
+      toast.error("No transactional records to export.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    const doctorName = profile?.fullName || "Consultant";
+    
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(30, 41, 59);
+    doc.text("CareLabs Financial Ledger", 14, 22);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Doctor: Dr. ${doctorName}`, 14, 30);
+    doc.text(`Export Date: ${new Date().toLocaleString()}`, 14, 35);
+    doc.text(`Total Revenue: LKR ${earnings.gross.toLocaleString()}`, 14, 40);
+    doc.text(`Net Wallet: LKR ${earnings.estimatedNet.toLocaleString()}`, 14, 45);
+    
+    autoTable(doc, {
+      startY: 55,
+      head: [["Date & Time", "Patient", "Consultation Type", "Status", "Credit (LKR)"]],
+      body: filteredEarnings.map(a => [
+        new Date(a.appointmentTime).toLocaleString(),
+        a.patientFullName || "Unregistered",
+        a.type,
+        "Settled",
+        (a.consultationFee || 1500).toLocaleString()
+      ]),
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
+      bodyStyles: { textColor: [51, 65, 85] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 55 },
+    });
+
+    doc.save(`CareLabs_Earnings_${new Date().toISOString().split("T")[0]}.pdf`);
+    toast.success("Financial PDF report generated.");
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-50 flex">
@@ -1096,6 +1148,7 @@ export default function DoctorDashboardPage() {
                 VERIFICATION: {profile.verificationStatus}
               </div>
             )}
+            <NotificationBell />
             <button
               onClick={() => setShowLogoutConfirm(true)}
               className="px-3 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition"
@@ -1318,17 +1371,38 @@ export default function DoctorDashboardPage() {
             </div>
 
             <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
                    <div>
                      <h2 className="text-xl font-bold text-slate-900 leading-tight">Ledger Logs</h2>
                      <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1">Activity Statement</p>
                    </div>
-                   <button 
-                      onClick={handleDownloadCSV}
-                      className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 transition-all active:scale-95"
-                    >
-                      Download CSV
-                    </button>
+                   
+                   <div className="flex flex-1 min-w-[300px] items-center gap-4">
+                      <div className="relative flex-1 group">
+                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                         <input 
+                           type="text" 
+                           placeholder="Search ledger by patient or type..." 
+                           value={earningsSearchQuery}
+                           onChange={(e) => setEarningsSearchQuery(e.target.value)}
+                           className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                         />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={handleDownloadCSV}
+                          className="px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 transition-all active:scale-95 flex items-center gap-2"
+                        >
+                          <Download className="w-3.5 h-3.5" /> CSV
+                        </button>
+                        <button 
+                          onClick={handleDownloadEarningsPDF}
+                          className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2 shadow-lg shadow-slate-200"
+                        >
+                          <FileText className="w-3.5 h-3.5" /> PDF
+                        </button>
+                      </div>
+                   </div>
                 </div>
                 
                 <div className="overflow-x-auto">
@@ -1342,7 +1416,7 @@ export default function DoctorDashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {completedAppointments.map((a) => (
+                        {filteredEarnings.map((a) => (
                           <tr key={a.id} className="group hover:bg-slate-50/50 transition-colors">
                             <td className="py-4 px-2 font-mono text-[10px] text-slate-400 group-hover:text-slate-900 transition-colors">{new Date(a.appointmentTime).toLocaleString()}</td>
                             <td className="py-4 px-2 uppercase tracking-tight">{a.type}</td>
@@ -1357,7 +1431,7 @@ export default function DoctorDashboardPage() {
                       </tbody>
                     </table>
                 </div>
-                {completedAppointments.length === 0 && (
+                {filteredEarnings.length === 0 && (
                   <div className="py-20 flex flex-col items-center justify-center text-center opacity-50">
                      <DollarSign className="w-12 h-12 text-slate-300 mb-4" />
                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No Transactional Records</p>

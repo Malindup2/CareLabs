@@ -19,4 +19,5 @@ public class UserEmailDto {
     private UUID id;
     private String email;
     private String role;
+    private String fullName;
 }

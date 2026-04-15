@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Activity } from "lucide-react";
 import { clearAuth, getRole, getToken } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import NotificationBell from "./NotificationBell";
 
 export default function PublicNavbar() {
   const router = useRouter();
@@ -76,6 +77,7 @@ export default function PublicNavbar() {
                     Dashboard
                   </Link>
                 )}
+                <NotificationBell />
                 <button
                   type="button"
                   onClick={handleLogout}

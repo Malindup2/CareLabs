@@ -63,6 +63,9 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState("All Specialties");
   const [selectedAvailability, setSelectedAvailability] = useState("Scheduled Doctors");
+  const [selectedPriceRange, setSelectedPriceRange] = useState("Any Price");
+  const [selectedExperience, setSelectedExperience] = useState("Any Experience");
+  const [publicStats, setPublicStats] = useState<{ totalVerifiedDoctors: number; totalSpecialties: number; status: string } | null>(null);
   const [doctors, setDoctors] = useState<LiveDoctor[]>([]);
   const [doctorScheduleCount, setDoctorScheduleCount] = useState<Record<string, number>>({});
   const [patientBookingCount, setPatientBookingCount] = useState<number | null>(null);
@@ -95,6 +98,18 @@ export default function Home() {
     };
 
     void loadDoctors();
+  }, []);
+
+  useEffect(() => {
+    const loadPublicStats = async () => {
+      try {
+        const stats = await apiGet<{ totalVerifiedDoctors: number; totalSpecialties: number; status: string }>("/doctors/public/stats");
+        setPublicStats(stats);
+      } catch {
+        setPublicStats(null);
+      }
+    };
+    void loadPublicStats();
   }, []);
 
   useEffect(() => {
@@ -157,12 +172,27 @@ export default function Home() {
         !searchTerm ||
         `${doc.fullName || ""} ${doc.specialty || ""}`.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesSpecialty = selectedSpecialty === "All Specialties" || doc.specialty === selectedSpecialty;
+      
       const hasPublishedSchedule = (doctorScheduleCount[doc.id] || 0) > 0;
       const matchesAvailability = selectedAvailability === "All Doctors" ? true : hasPublishedSchedule;
 
-      return matchesSearch && matchesSpecialty && matchesAvailability;
+      // Price Range Logic
+      let matchesPrice = true;
+      const fee = doc.consultationFee || 0;
+      if (selectedPriceRange === "Under 1,000") matchesPrice = fee < 1000;
+      else if (selectedPriceRange === "1,000 - 5,000") matchesPrice = fee >= 1000 && fee <= 5000;
+      else if (selectedPriceRange === "Above 5,000") matchesPrice = fee > 5000;
+
+      // Experience Logic
+      let matchesExperience = true;
+      const exp = doc.experienceYears || 0;
+      if (selectedExperience === "Junior (< 5 yrs)") matchesExperience = exp < 5;
+      else if (selectedExperience === "Senior (5-15 yrs)") matchesExperience = exp >= 5 && exp <= 15;
+      else if (selectedExperience === "Expert (15+ yrs)") matchesExperience = exp > 15;
+
+      return matchesSearch && matchesSpecialty && matchesAvailability && matchesPrice && matchesExperience;
     });
-  }, [doctors, searchTerm, selectedSpecialty, selectedAvailability, doctorScheduleCount]);
+  }, [doctors, searchTerm, selectedSpecialty, selectedAvailability, selectedPriceRange, selectedExperience, doctorScheduleCount]);
 
   return (
     <div suppressHydrationWarning className="min-h-screen bg-slate-50/30 selection:bg-primary/20 selection:text-primary scroll-smooth">
@@ -308,16 +338,59 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Clear Filters */}
+                  {/* Price Range Filter */}
+                  <div className="mb-6">
+                    <h4 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">Consultation Fee</h4>
+                    <div className="space-y-2">
+                      {["Any Price", "Under 1,000", "1,000 - 5,000", "Above 5,000"].map((range) => (
+                        <label key={range} className="flex items-center gap-3 cursor-pointer group">
+                          <input 
+                            type="radio" 
+                            name="priceRange" 
+                            checked={selectedPriceRange === range}
+                            onChange={() => setSelectedPriceRange(range)}
+                            className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-600 cursor-pointer" 
+                          />
+                          <span className={`text-sm font-medium ${selectedPriceRange === range ? 'text-slate-900' : 'text-slate-500 group-hover:text-slate-700'}`}>
+                            {range}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Experience Filter */}
+                  <div className="mb-6">
+                    <h4 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider">Clinical Experience</h4>
+                    <div className="space-y-2">
+                      {["Any Experience", "Junior (< 5 yrs)", "Senior (5-15 yrs)", "Expert (15+ yrs)"].map((exp) => (
+                        <label key={exp} className="flex items-center gap-3 cursor-pointer group">
+                          <input 
+                            type="radio" 
+                            name="experience" 
+                            checked={selectedExperience === exp}
+                            onChange={() => setSelectedExperience(exp)}
+                            className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-600 cursor-pointer" 
+                          />
+                          <span className={`text-sm font-medium ${selectedExperience === exp ? 'text-slate-900' : 'text-slate-500 group-hover:text-slate-700'}`}>
+                            {exp}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
                   <button 
                     onClick={() => {
                       setSelectedSpecialty("All Specialties");
                       setSelectedAvailability("Scheduled Doctors");
+                      setSelectedPriceRange("Any Price");
+                      setSelectedExperience("Any Experience");
                       setSearchTerm("");
                     }}
-                    className="w-full py-2.5 mt-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                    className="w-full py-4 mt-2 rounded-2xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200 active:scale-95"
                   >
-                    Clear Filters
+                    Clear All Filters
                   </button>
                 </div>
               </aside>
@@ -364,20 +437,26 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-10 lg:py-12">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-0 md:divide-x divide-slate-100">
               <div className="text-center group">
-                <p className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary transition-colors duration-300">1,200+</p>
-                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Verified doctors</p>
+                <p className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary transition-colors duration-300">
+                  {publicStats?.totalVerifiedDoctors ?? doctors.length ?? 0}+
+                </p>
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Verified Specialists</p>
               </div>
               <div className="text-center group hidden md:block">
-                <p className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary transition-colors duration-300">48,000+</p>
-                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Patients served</p>
+                <p className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary transition-colors duration-300">
+                  {publicStats?.totalSpecialties ?? 0}+
+                </p>
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Medical Specialties</p>
               </div>
               <div className="text-center group">
-                <p className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary transition-colors duration-300">4.9<span className="text-slate-300 font-medium">/5</span></p>
-                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Average rating</p>
+                <p className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary transition-colors duration-300">100%</p>
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Verified Reviews</p>
               </div>
               <div className="text-center group hidden md:block">
-                <p className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary transition-colors duration-300">50,000+</p>
-                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">AI checks done</p>
+                <p className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight group-hover:text-primary transition-colors duration-300">
+                  {publicStats?.status === 'OPERATIONAL' ? 'LIVE' : 'AUTO'}
+                </p>
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Network Status</p>
               </div>
             </div>
           </div>
@@ -566,51 +645,8 @@ export default function Home() {
 
 
 
-        {/* --- 5. TESTIMONIALS --- */}
-        <section className="py-24 lg:py-32 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="mb-20">
-              <h2 className="text-xs font-bold tracking-[0.2em] text-blue-600 uppercase mb-4">Patient reviews</h2>
-              <p className="text-4xl md:text-5xl font-extrabold text-slate-900 mb-6 tracking-tight">Trusted by thousands</p>
-              <p className="text-xl text-slate-500 max-w-2xl font-medium">Real feedback from real patients and doctors on the CareLabs network.</p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8">
-              {[
-                { 
-                  quote: "Booked a cardiologist in under 3 minutes. The video call was crystal clear and the prescription was sent instantly to my phone. A total game changer.",
-                  initials: "AK", name: "Ashan K.", role: "Patient · Colombo"
-                },
-                { 
-                  quote: "The AI checker told me exactly what specialist I needed. Saved me hours of guessing and the anxiety of wondering what was wrong.",
-                  initials: "NP", name: "Nimali P.", role: "Patient · Kandy"
-                },
-                { 
-                  quote: "As a doctor, the scheduling tools are brilliant. My patients love the digital prescriptions and I love my organized transparent dashboard.",
-                  initials: "SP", name: "Dr. S. Perera", role: "Doctor · Gampaha"
-                }
-              ].map((review, i) => (
-                <div key={i} className="bg-slate-50 border border-slate-100 p-8 rounded-[2rem] flex flex-col h-full hover:bg-white hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] hover:border-slate-200 transition-all duration-300">
-                  <div className="flex gap-1.5 mb-6">
-                    {[...Array(5)].map((_, j) => <Star key={j} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
-                  </div>
-                  <p className="text-slate-700 leading-relaxed mb-10 flex-1 font-medium text-lg tracking-tight">
-                    "{review.quote}"
-                  </p>
-                  <div className="flex items-center gap-4 mt-auto">
-                    <div className="w-12 h-12 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center text-slate-700 font-bold tracking-wider text-sm">
-                      {review.initials}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900 leading-tight">{review.name}</p>
-                      <p className="text-xs text-slate-500 font-medium mt-1">{review.role}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* --- 5. TESTIMONIALS (Hidden if no real reviews) --- */}
+        {/* We keep this space for future real testimonials from ReviewRepository */}
 
         {/* --- 6. FINAL CTA --- */}
         <section className="py-16 lg:py-20 bg-blue-600 relative overflow-hidden">

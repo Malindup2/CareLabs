@@ -13,5 +13,6 @@ public enum NotificationEvent {
     PRESCRIPTION_ISSUED,
     DOC_APPROVED,
     DOC_REJECTED,
-    PAYOUT_PROCESSED
+    PAYOUT_PROCESSED,
+    ANNOUNCEMENT
 }

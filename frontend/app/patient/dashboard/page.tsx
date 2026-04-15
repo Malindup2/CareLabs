@@ -230,7 +230,7 @@ export default function PatientDashboardPage() {
                   Quickly assess your symptoms using our advanced clinical AI to find the right specialist.
                 </p>
                 <Link
-                  href="/patient/ai-assessment"
+                  href="#ai"
                   className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-indigo-700 transition shadow-lg shadow-indigo-500/20"
                 >
                   Start Assessment <ArrowRight className="w-3 h-3" />
