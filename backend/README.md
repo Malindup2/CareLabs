@@ -69,7 +69,7 @@
 | `patient-service`      | `8082` | Patient registration, profiles, medical reports, history |
 | `doctor-service`       | `8083` | Doctor profiles, availability, digital prescriptions     |
 | `appointments-service` | `8084` | Appointment booking, modification, cancellation, tracking|
-| `notification-service` | `8086` | Email and SMS notifications                              |
+| `notification-service` | `8086` | Email notifications                                      |
 | `payment-service`      | `8087` | Payment processing via PayHere/Stripe                    |
 | `ai-symptom-service`   | `8088` | AI-powered symptom checker (Optional Enhancement)        |
 
@@ -208,7 +208,7 @@ All requests go through the **API Gateway** at `http://localhost:8080`.
 
 | Method | Endpoint | Description | Role |
 |:---|:---|:---|:---|
-| POST | `/notifications` | Internal trigger (Email/SMS) | Internal |
+| POST | `/notifications` | Internal trigger (Email) | Internal |
 | GET | `/notifications` | Get user's notification history | Any |
 | PUT | `/notifications/{id}/read` | Mark as read | Any |
 
@@ -242,7 +242,7 @@ Each microservice uses its own isolated PostgreSQL database:
 | `doctor-service`     | `carelabs_doctors`       |
 | `appointments`       | `carelabs_appointments`  |
 | `payment-service`    | `carelabs_payments`      |
-| `notification-service` | *(No DB — uses SMTP/SMS APIs)* |
+| `notification-service` | `carelabs_notifications` uses SMTP API |
 
 ---
 

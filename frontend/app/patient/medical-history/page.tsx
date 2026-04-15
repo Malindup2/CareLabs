@@ -1,14 +1,14 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { 
-  ShieldAlert, 
-  FileText, 
-  User, 
-  Phone, 
-  Calendar, 
-  Activity, 
-  TrendingUp, 
+import {
+  ShieldAlert,
+  FileText,
+  User,
+  Phone,
+  Calendar,
+  Activity,
+  TrendingUp,
   Dna,
   ArrowRight,
   Stethoscope,
@@ -44,10 +44,27 @@ interface Report {
   fileUrl: string;
   type: ReportType;
 }
+interface PrescriptionItem {
+  id: string;
+  medicineName: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+}
+interface DigitalPrescription {
+  id: string;
+  appointmentId: string;
+  doctorId: string;
+  patientId: string;
+  validUntil: string;
+  notes: string;
+  items: PrescriptionItem[];
+}
 interface MedicalHistory {
   profile: PatientProfile;
   allergies: Allergy[];
   reports: Report[];
+  digitalPrescriptions: DigitalPrescription[];
 }
 
 export default function MedicalHistoryPage() {
@@ -59,8 +76,22 @@ export default function MedicalHistoryPage() {
     if (!token) return;
     setLoading(true);
     try {
+      //Fetch core medical record (Mission Critical)
       const data = await apiGetAuth<MedicalHistory>("/patients/medical-history", token);
-      setHistory(data);
+
+      //Fetch prescriptions (Secondary Enhancement)
+      let dps: DigitalPrescription[] = [];
+      try {
+        const userId = localStorage.getItem('userId');
+        if (userId) {
+          dps = await apiGetAuth<DigitalPrescription[]>(`/appointments/patient/${userId}/prescriptions`, token);
+        }
+      } catch (prescErr) {
+        console.error("Non-critical prescription fetch failure:", prescErr);
+        // We continue anyway so the user sees their main records
+      }
+
+      setHistory({ ...data, digitalPrescriptions: dps });
     } catch (err: any) {
       toast.error(err.message || "Failed to load medical history");
     } finally {
@@ -135,10 +166,10 @@ export default function MedicalHistoryPage() {
           </div>
 
           <div className="p-8 rounded-[2.5rem] bg-blue-600 text-white relative overflow-hidden group">
-             <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-colors" />
-             <p className="text-[10px] font-black uppercase tracking-widest text-blue-100 relative z-10">Care Analysis</p>
-             <h3 className="mt-4 text-xl font-black tracking-tight relative z-10 leading-tight">Your medical history is vital for accurate diagnosis.</h3>
-             <p className="mt-4 text-xs font-medium text-blue-100/80 relative z-10 leading-relaxed">Regularly update your reports and sensitivities to ensure the highest safety during clinical sessions.</p>
+            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-colors" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-100 relative z-10">Care Analysis</p>
+            <h3 className="mt-4 text-xl font-black tracking-tight relative z-10 leading-tight">Your medical history is vital for accurate diagnosis.</h3>
+            <p className="mt-4 text-xs font-medium text-blue-100/80 relative z-10 leading-relaxed">Regularly update your reports and sensitivities to ensure the highest safety during clinical sessions.</p>
           </div>
         </div>
 
@@ -146,23 +177,23 @@ export default function MedicalHistoryPage() {
           <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm group">
             <div className="flex items-center justify-between gap-4 mb-8">
               <div className="flex items-center gap-4">
-                 <div className="h-12 w-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform shadow-sm">
-                    <ShieldAlert className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight">Active Sensitivities</h2>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">Verified Clinical Alerts</p>
-                 </div>
+                <div className="h-12 w-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform shadow-sm">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">Active Sensitivities</h2>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">Verified Clinical Alerts</p>
+                </div>
               </div>
               <span className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
                 {history.allergies.length} Records
               </span>
             </div>
-            
+
             {history.allergies.length === 0 ? (
               <div className="py-12 border border-dashed border-slate-200 rounded-[2rem] bg-slate-50/50 flex flex-col items-center justify-center text-center">
-                 <ShieldAlert className="w-12 h-12 text-slate-200 mb-4" />
-                 <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No Historical Sensitivities Registered</p>
+                <ShieldAlert className="w-12 h-12 text-slate-200 mb-4" />
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No Historical Sensitivities Registered</p>
               </div>
             ) : (
               <div className="grid gap-4">
@@ -170,17 +201,16 @@ export default function MedicalHistoryPage() {
                   <div key={a.id} className="group/item relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/50 p-6 hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                       <div className="flex items-start gap-4">
-                         <div className="mt-1 h-2 w-2 rounded-full bg-rose-500 group-hover/item:animate-ping" />
-                         <div>
-                            <p className="text-lg font-black text-slate-900 tracking-tight leading-none">{a.allergen}</p>
-                            <p className="text-sm font-medium text-slate-500 mt-2 leading-relaxed italic">"{a.reaction || "No reaction protocol specified"}"</p>
-                         </div>
+                        <div className="mt-1 h-2 w-2 rounded-full bg-rose-500 group-hover/item:animate-ping" />
+                        <div>
+                          <p className="text-lg font-black text-slate-900 tracking-tight leading-none">{a.allergen}</p>
+                          <p className="text-sm font-medium text-slate-500 mt-2 leading-relaxed italic">"{a.reaction || "No reaction protocol specified"}"</p>
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-xl bg-white border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600">{a.type}</span>
-                        <span className={`rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${
-                          a.severity === 'SEVERE' ? 'bg-rose-600 text-white border-rose-600 shadow-lg shadow-rose-200' : 'bg-white border-slate-200 text-slate-600'
-                        }`}>{a.severity}</span>
+                        <span className={`rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${a.severity === 'SEVERE' ? 'bg-rose-600 text-white border-rose-600 shadow-lg shadow-rose-200' : 'bg-white border-slate-200 text-slate-600'
+                          }`}>{a.severity}</span>
                       </div>
                     </div>
                   </div>
@@ -192,13 +222,71 @@ export default function MedicalHistoryPage() {
           <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm group">
             <div className="flex items-center justify-between gap-4 mb-8">
               <div className="flex items-center gap-4">
-                 <div className="h-12 w-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shadow-sm">
-                    <FileText className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight">Diagnostic Evidence</h2>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">Clinical Artifact Repository</p>
-                 </div>
+                <div className="h-12 w-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform shadow-sm">
+                  <Stethoscope className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">Verified Digital Prescriptions</h2>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">Automated Clinical Directives</p>
+                </div>
+              </div>
+              <span className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                {history.digitalPrescriptions?.length || 0} Records
+              </span>
+            </div>
+
+            {(history.digitalPrescriptions?.length || 0) === 0 ? (
+              <div className="py-12 border border-dashed border-slate-200 rounded-[2rem] bg-slate-50/50 flex flex-col items-center justify-center text-center">
+                <Stethoscope className="w-12 h-12 text-slate-200 mb-4" />
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No Digital Prescriptions Issued</p>
+              </div>
+            ) : (
+              <div className="grid gap-6">
+                {history.digitalPrescriptions.map((dp) => (
+                  <div key={dp.id} className="p-8 rounded-[2rem] border border-slate-100 bg-slate-50/50 hover:bg-white hover:shadow-xl transition-all duration-300">
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Issued On Session #{dp.appointmentId.slice(0, 8)}</p>
+                        <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-tighter">Valid Until: {dp.validUntil}</p>
+                      </div>
+                      <div className="p-3 bg-white rounded-2xl border border-slate-100"><Activity className="w-4 h-4 text-slate-400" /></div>
+                    </div>
+                    <div className="space-y-4">
+                      {dp.items.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-50 shadow-sm">
+                          <div className="flex items-center gap-4">
+                            <div className="h-8 w-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-black text-[10px]">{idx + 1}</div>
+                            <div>
+                              <p className="text-sm font-black text-slate-900">{item.medicineName}</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{item.dosage} | {item.frequency}</p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-3 py-1 rounded-lg">{item.duration}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {dp.notes && (
+                      <div className="mt-6 p-4 rounded-2xl bg-blue-50/30 border border-blue-100/30">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-blue-600 mb-2">Doctor's Directives</p>
+                        <p className="text-xs font-medium text-slate-600 leading-relaxed italic">"{dp.notes}"</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm group">
+            <div className="flex items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shadow-sm">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">Manual Diagnostic Evidence</h2>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">Clinical Artifact Repository</p>
+                </div>
               </div>
               <span className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
                 {history.reports.length} Files
@@ -207,8 +295,8 @@ export default function MedicalHistoryPage() {
 
             {history.reports.length === 0 ? (
               <div className="py-12 border border-dashed border-slate-200 rounded-[2rem] bg-slate-50/50 flex flex-col items-center justify-center text-center">
-                 <FileText className="w-12 h-12 text-slate-200 mb-4" />
-                 <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No Diagnostic Artifacts Uploaded</p>
+                <FileText className="w-12 h-12 text-slate-200 mb-4" />
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No Diagnostic Artifacts Uploaded</p>
               </div>
             ) : (
               <div className="grid gap-4">
@@ -221,16 +309,16 @@ export default function MedicalHistoryPage() {
                     className="group/report flex items-center justify-between gap-6 rounded-3xl border border-slate-200 bg-slate-50/50 p-6 hover:bg-white hover:border-blue-500 hover:shadow-xl hover:shadow-blue-200 transition-all duration-300"
                   >
                     <div className="flex items-center gap-5">
-                       <div className="h-12 w-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover/report:text-blue-500 transition-colors shadow-sm">
-                          <FileText className="w-6 h-6" />
-                       </div>
-                       <div>
-                          <p className="text-base font-black text-slate-900 tracking-tight leading-none group-hover/report:text-blue-600 transition-colors">{r.fileName}</p>
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-2">{r.type}</p>
-                       </div>
+                      <div className="h-12 w-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover/report:text-blue-500 transition-colors shadow-sm">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-base font-black text-slate-900 tracking-tight leading-none group-hover/report:text-blue-600 transition-colors">{r.fileName}</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-2">{r.type}</p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 text-blue-600 opacity-0 group-hover/report:opacity-100 transition-all font-black uppercase text-[10px] tracking-widest">
-                       Access Evidence <ExternalLink className="w-4 h-4" />
+                      Access Evidence <ExternalLink className="w-4 h-4" />
                     </div>
                   </a>
                 ))}

@@ -17,8 +17,12 @@ import { apiGetAuth, apiPutAuth, apiPostAuth, apiDeleteAuth, clearAuth, getRole,
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell
+} from 'recharts';
 
-type Tab = "overview" | "verification" | "appointments" | "users" | "broadcast";
+type Tab = "overview" | "verification" | "appointments" | "users" | "broadcast" | "finance";
 
 interface Doctor {
   id: string;
@@ -101,6 +105,10 @@ export default function AdminCommandCenter() {
   const [appStatusFilter, setAppStatusFilter] = useState("ALL");
   const [appDateFilter, setAppDateFilter] = useState("");
 
+  // Finance Filter States
+  const [finSearch, setFinSearch] = useState("");
+  const [finStatusFilter, setFinStatusFilter] = useState("ALL");
+
   const filteredAppointments = useMemo(() => {
     return appointments.filter(app => {
       const matchesSearch = app.id.toLowerCase().includes(appSearch.toLowerCase()) ||
@@ -111,6 +119,39 @@ export default function AdminCommandCenter() {
       return matchesSearch && matchesStatus && matchesDate;
     });
   }, [appointments, appSearch, appStatusFilter, appDateFilter]);
+
+  // Analytics Transformations
+  const userDistData = useMemo(() => [
+    { name: 'Doctors', value: doctors.length },
+    { name: 'Patients', value: patients.length }
+  ], [doctors.length, patients.length]);
+
+  const paymentLifecycleData = useMemo(() => {
+    const counts = payments.reduce((acc: any, p) => {
+      acc[p.status] = (acc[p.status] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.keys(counts).map(status => ({ name: status, value: counts[status] }));
+  }, [payments]);
+
+  const appVelocityData = useMemo(() => {
+    const counts = appointments.reduce((acc: any, a) => {
+      acc[a.status] = (acc[a.status] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.keys(counts).map(status => ({ name: status, count: counts[status] }));
+  }, [appointments]);
+
+  const COLORS = ['#2563eb', '#6366f1', '#f43f5e', '#10b981', '#f59e0b'];
+
+  const filteredPayments = useMemo(() => {
+    return payments.filter(p => {
+      const q = finSearch.toLowerCase();
+      const matchesSearch = p.id.toLowerCase().includes(q) || p.appointmentId.toLowerCase().includes(q);
+      const matchesStatus = finStatusFilter === "ALL" || p.status === finStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [payments, finSearch, finStatusFilter]);
 
   const downloadLedgerPDF = () => {
     const doc = new jsPDF();
@@ -142,6 +183,37 @@ export default function AdminCommandCenter() {
 
     doc.save(`CareLabs_Ledger_${new Date().toISOString().split('T')[0]}.pdf`);
     toast.success("Ledger downloaded successfully.");
+  };
+
+  const downloadFinancePDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42); 
+    doc.text("CareLabs Financial Audit Report", 14, 20);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleString()} | Official Financial Oversight`, 14, 28);
+
+    const tableData = filteredPayments.map(p => [
+      new Date(p.createdAt).toLocaleDateString(),
+      p.id.slice(0, 8),
+      p.appointmentId.slice(0, 8),
+      `Rs. ${p.amount.toLocaleString()}`,
+      p.status
+    ]);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['Date', 'Trans ID', 'App ID', 'Amount', 'Status']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [240, 249, 255] },
+      margin: { top: 35 },
+    });
+
+    doc.save(`CareLabs_Finance_${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success("Financial report downloaded.");
   };
 
   useEffect(() => {
@@ -294,6 +366,7 @@ export default function AdminCommandCenter() {
           <NavItem active={activeTab === "verification"} onClick={() => setActiveTab("verification")} icon={UserCheck} label="Verification" badge={doctors.filter(d => d.verificationStatus === "PENDING").length} />
           <NavItem active={activeTab === "appointments"} onClick={() => setActiveTab("appointments")} icon={Calendar} label="Appointments" />
           <NavItem active={activeTab === "users"} onClick={() => setActiveTab("users")} icon={Users} label="User Directory" />
+          <NavItem active={activeTab === "finance"} onClick={() => setActiveTab("finance")} icon={CreditCard} label="Finance Hub" />
           <NavItem active={activeTab === "broadcast"} onClick={() => setActiveTab("broadcast")} icon={Megaphone} label="Broadcast" />
         </nav>
       </aside>
@@ -334,59 +407,193 @@ export default function AdminCommandCenter() {
                    <StatCard icon={CreditCard} label="Revenue" value={`Rs. ${revenue.toLocaleString()}`} subtitle="Net Ecosystem Flow" accent="blue" />
                 </div>
 
-                <div className="grid lg:grid-cols-3 gap-8">
-                   <div className="lg:col-span-2 bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm overflow-hidden relative group">
-                      <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/5 rounded-full blur-3xl group-hover:bg-blue-500/10 transition-colors" />
-                      <div className="flex items-center justify-between mb-8">
-                         <div>
-                            <h3 className="text-xl font-black text-slate-900 tracking-tight">Ecosystem Intelligence</h3>
-                            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1 text-left">Real-time Platform Audit</p>
+                <div className="space-y-8">
+                   {/* Main Analytics Row */}
+                   <div className="grid lg:grid-cols-3 gap-8">
+                      {/* Left: Bar Chart (2/3 width) */}
+                      <div className="lg:col-span-2 bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm group relative overflow-hidden h-full flex flex-col">
+                         <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/5 rounded-full blur-3xl group-hover:bg-blue-500/10 transition-colors" />
+                         <div className="flex items-center justify-between mb-8 relative z-10">
+                            <div>
+                               <h3 className="text-xl font-black text-slate-900 tracking-tight">Booking Velocity</h3>
+                               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1">Status Progression Analytics</p>
+                            </div>
+                            <Calendar className="w-5 h-5 text-blue-500" />
                          </div>
-                         <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-2xl border border-emerald-100">
-                            <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Services Active</span>
+                         <div className="flex-1 w-full relative z-10 min-h-[100px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                               <BarChart data={appVelocityData}>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} />
+                                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} />
+                                  <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                                  <Bar dataKey="count" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={40} />
+                               </BarChart>
+                            </ResponsiveContainer>
                          </div>
                       </div>
 
-                      <div className="space-y-6">
-                        {appointments.slice(-4).reverse().map((app) => (
-                          <div key={app.id} className="flex items-center gap-5 p-4 rounded-3xl border border-slate-50 bg-slate-50/30 hover:bg-white hover:shadow-md transition-all">
-                            <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-                              <Activity className="w-5 h-5 shadow-inner" />
+                      {/* Right: Pie Charts Stack (1/3 width) */}
+                      <div className="lg:col-span-1 space-y-8 h-full flex flex-col">
+                         <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm group">
+                            <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4">Patient vs Provider</h2>
+                            <div className="h-[150px]">
+                               <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                     <Pie data={userDistData} innerRadius={45} outerRadius={60} paddingAngle={5} dataKey="value">
+                                        {userDistData.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                     </Pie>
+                                     <Tooltip />
+                                     <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase' }} />
+                                  </PieChart>
+                               </ResponsiveContainer>
                             </div>
-                            <div className="flex-1">
-                               <div className="flex items-center gap-2">
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Event #{app.id.slice(0, 8)}</p>
-                                  <StatusPill status={app.status} />
-                               </div>
-                               <p className="text-sm font-bold text-slate-900 mt-0.5">Care session Transitioned to {app.status.toLowerCase()}</p>
-                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mt-1">Audit Ledger Registered</p>
+                         </div>
+                         <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
+                            <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4">Financial Lifecycle</h2>
+                            <div className="h-[150px]">
+                               <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                     <Pie data={paymentLifecycleData} outerRadius={60} dataKey="value">
+                                        {paymentLifecycleData.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                                        ))}
+                                     </Pie>
+                                     <Tooltip />
+                                     <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase' }} />
+                                  </PieChart>
+                               </ResponsiveContainer>
                             </div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase">{formatRelativeTime(app.appointmentTime)}</p>
-                          </div>
-                        ))}
-                        {appointments.length === 0 && <p className="text-center py-10 text-slate-400 font-bold uppercase tracking-widest text-xs">No recent activity detected</p>}
+                         </div>
                       </div>
                    </div>
 
-                   <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm relative overflow-hidden group flex flex-col items-center justify-center text-center">
-                      <div className="absolute -right-4 -top-4 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl group-hover:bg-indigo-500/10 transition-colors" />
-                      <div className="relative z-10 space-y-4">
-                        <div className="w-20 h-20 rounded-[2.5rem] bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600 shadow-xl shadow-indigo-100">
-                           <HeartPulse className="w-10 h-10" />
-                        </div>
-                        <div>
-                           <h3 className="text-2xl font-black text-slate-900 tracking-tight">System Status</h3>
-                           <div className="flex items-center justify-center gap-2 mt-2">
-                              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                              <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest">All Core Engines Operational</p>
-                           </div>
-                           <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mt-4 px-4 leading-relaxed line-clamp-2">Telemetry handshake verified across {doctors.length + patients.length} registered nodes.</p>
-                        </div>
-                        <div className="pt-4">
-                           <button onClick={() => setActiveTab("broadcast")} className="px-6 py-2.5 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-200">System Broadcast</button>
-                        </div>
+                   {/* Operational Status & Feed */}
+                   <div className="grid lg:grid-cols-3 gap-8">
+                      <div className="lg:col-span-1 bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden group shadow-2xl shadow-slate-900/40">
+                         <div className="absolute right-0 top-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl" />
+                         <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-6">Ecosystem Health</p>
+                         <h3 className="text-xl font-black tracking-tight leading-none mb-8">Platform is healthy and operational.</h3>
+                         <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                               <span className="text-xs font-bold text-slate-400">API Gateway</span>
+                               <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest font-mono">STABLE</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                               <span className="text-xs font-bold text-slate-400">Auth Cluster</span>
+                               <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest font-mono">SYNCED</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                               <span className="text-xs font-bold text-slate-400">Financial Ops</span>
+                               <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest font-mono">FLOW_OK</span>
+                            </div>
+                         </div>
                       </div>
+
+                      <div className="lg:col-span-2 bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm group">
+                         <div className="flex items-center justify-between mb-8">
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Live Audit Feed</h3>
+                            <RefreshCw className="w-4 h-4 text-slate-300 group-hover:rotate-180 transition-transform duration-700" />
+                         </div>
+                         <div className="grid md:grid-cols-2 gap-4">
+                            {appointments.slice(-4).reverse().map(app => (
+                               <div key={app.id} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-50 hover:bg-white hover:border-slate-200 transition-all shadow-sm">
+                                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                  <div className="flex-1 min-w-0">
+                                     <p className="text-[10px] font-black text-slate-900 truncate uppercase">#{app.id.slice(0, 8)}</p>
+                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{app.status}</p>
+                                  </div>
+                                  <p className="text-[9px] font-black text-slate-300">{formatRelativeTime(app.appointmentTime)}</p>
+                               </div>
+                            ))}
+                         </div>
+                      </div>
+                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "finance" && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                   <StatCard icon={CreditCard} label="Net Revenue" value={`Rs. ${revenue.toLocaleString()}`} subtitle="Successfully Processed" accent="blue" />
+                   <StatCard icon={TrendingDown} label="Failed attempts" value={String(payments.filter(p => p.status === 'FAILED').length)} subtitle="Transaction Friction" />
+                   <StatCard icon={RefreshCw} label="Pending Ledger" value={String(payments.filter(p => p.status === 'PENDING').length)} subtitle="Awaiting Settlement" />
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm">
+                   <div className="p-8 border-b border-slate-100 flex flex-wrap justify-between items-center bg-slate-50/50 gap-6">
+                     <div className="flex-1 min-w-[300px]">
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Financial Audit Hub</h3>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1">Real-time Transaction Lifecycle Monitoring</p>
+                     </div>
+                     <div className="flex flex-wrap items-center gap-4">
+                       <div className="relative group min-w-[200px]">
+                         <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+                         <input 
+                           type="text" 
+                           placeholder="Search Transactions..." 
+                           value={finSearch}
+                           onChange={(e) => setFinSearch(e.target.value)}
+                           className="w-full pl-11 pr-5 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:ring-4 focus:ring-blue-50 focus:border-blue-200 transition-all outline-none shadow-sm" 
+                         />
+                       </div>
+                       <select 
+                         value={finStatusFilter}
+                         onChange={(e) => setFinStatusFilter(e.target.value)}
+                         className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-600 focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none shadow-sm cursor-pointer"
+                       >
+                           <option value="ALL">All Payments</option>
+                           <option value="SUCCESS">Success</option>
+                           <option value="PENDING">Pending</option>
+                           <option value="FAILED">Failed</option>
+                           <option value="REFUNDED">Refunded</option>
+                       </select>
+                       <button 
+                         onClick={downloadFinancePDF}
+                         className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+                       >
+                           <FileText className="w-4 h-4" /> Export Financial Report
+                       </button>
+                     </div>
+                   </div>
+                   <div className="overflow-x-auto">
+                     <table className="w-full border-collapse">
+                         <thead>
+                           <tr className="bg-slate-50/50 border-b border-slate-100">
+                             <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Timestamp</th>
+                             <th className="px-6 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Transaction ID</th>
+                             <th className="px-6 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Linked Appointment</th>
+                             <th className="px-6 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Settlement Amount</th>
+                             <th className="px-8 py-6 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Lifecycle State</th>
+                           </tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-50">
+                           {filteredPayments.slice().reverse().map(p => (
+                             <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                               <td className="px-8 py-7">
+                                   <p className="text-sm font-black text-slate-900 tracking-tight">{new Date(p.createdAt).toLocaleDateString()}</p>
+                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{new Date(p.createdAt).toLocaleTimeString()}</p>
+                               </td>
+                               <td className="px-6 py-7">
+                                   <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">TRX_{p.id.slice(0, 12)}</p>
+                               </td>
+                               <td className="px-6 py-7">
+                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">APP_{p.appointmentId.slice(0, 12)}</p>
+                               </td>
+                               <td className="px-6 py-7">
+                                   <p className="text-sm font-black text-slate-900 tracking-tight">Rs. {p.amount.toLocaleString()}</p>
+                               </td>
+                               <td className="px-8 py-7 text-right"><StatusPill status={p.status} /></td>
+                             </tr>
+                           ))}
+                           {payments.length === 0 && (
+                             <tr><td colSpan={5} className="py-24 text-center"><CreditCard className="w-12 h-12 text-slate-200 mx-auto mb-4" /><p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No transactions recorded</p></td></tr>
+                           )}
+                         </tbody>
+                     </table>
                    </div>
                 </div>
               </div>

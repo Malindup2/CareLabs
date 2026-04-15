@@ -43,6 +43,14 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getAppointmentsByPatient(patientId));
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
+    @GetMapping("/patient/{patientId}/prescriptions")
+    public ResponseEntity<List<com.carelabs.appointments.entity.Prescription>> getPatientPrescriptions(@PathVariable UUID patientId,
+                                                                                             Authentication authentication) {
+        ensurePatientOwnsRequestedPatientId(patientId, authentication);
+        return ResponseEntity.ok(appointmentService.getPrescriptionsByPatient(patientId));
+    }
+
     //View doctor schedule
     @PreAuthorize("hasRole('ADMIN') or hasRole('DOCTOR')")
     @GetMapping("/doctor/{doctorId}")
