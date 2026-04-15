@@ -54,6 +54,7 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.getPaymentById(id));
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @GetMapping("/appointment/{id}")
     public ResponseEntity<com.carelabs.paymentservice.entity.Payment> getPaymentByAppointmentId(@PathVariable java.util.UUID id) {
         return ResponseEntity.ok(paymentService.getPaymentByAppointmentId(id));
@@ -65,11 +66,13 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.getPaymentHistory());
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
     @GetMapping("/verify/{orderId}")
     public ResponseEntity<com.carelabs.paymentservice.entity.Payment> verifyPayment(@PathVariable java.util.UUID orderId) {
         return ResponseEntity.ok(paymentService.verifyPayment(orderId));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/refund/{id}")
     public ResponseEntity<com.carelabs.paymentservice.entity.Payment> refundPayment(@PathVariable java.util.UUID id) {
         return ResponseEntity.ok(paymentService.refundPayment(id));

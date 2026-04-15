@@ -3,7 +3,7 @@ import { Activity } from "lucide-react";
 
 export default function PublicFooter() {
   return (
-    <footer className="bg-white border-t border-slate-100 pt-20 pb-10">
+    <footer suppressHydrationWarning className="bg-white border-t border-slate-100 pt-20 pb-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Main Grid */}

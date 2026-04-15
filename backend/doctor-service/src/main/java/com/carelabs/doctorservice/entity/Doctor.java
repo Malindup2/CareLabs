@@ -31,10 +31,10 @@ public class Doctor {
     @Column(nullable = false, unique = true)
     private UUID userId;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String fullName;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String specialty;
 
     private String slmcNumber;
@@ -43,7 +43,7 @@ public class Doctor {
     private String bio;
     private String profileImageUrl;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private BigDecimal consultationFee;
 
     private Double averageRating = 0.0;

@@ -37,7 +37,15 @@ public class UserLookupService {
     public UserEmailDto getUserById(UUID userId) {
         String url = authServiceUrl + "/auth/internal/users/" + userId;
         try {
-            UserEmailDto dto = restTemplate.getForObject(url, UserEmailDto.class);
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("X-Auth-User-Id", "00000000-0000-0000-0000-000000000000");
+            headers.set("X-Auth-Role", "ADMIN");
+            org.springframework.http.HttpEntity<Void> entity = new org.springframework.http.HttpEntity<>(headers);
+
+            org.springframework.http.ResponseEntity<UserEmailDto> response = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, entity, UserEmailDto.class);
+            
+            UserEmailDto dto = response.getBody();
             if (dto == null) {
                 log.warn("Auth service returned null for userId={}", userId);
             }
@@ -45,6 +53,25 @@ public class UserLookupService {
         } catch (RestClientException e) {
             log.error("Failed to fetch user email from auth-service for userId={}: {}", userId, e.getMessage());
             return null;
+        }
+    }
+
+    public java.util.List<UserEmailDto> getAllUsers() {
+        String url = authServiceUrl + "/auth/internal/users";
+        try {
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("X-Auth-User-Id", "00000000-0000-0000-0000-000000000000");
+            headers.set("X-Auth-Role", "ADMIN");
+            org.springframework.http.HttpEntity<Void> entity = new org.springframework.http.HttpEntity<>(headers);
+
+            org.springframework.http.ResponseEntity<UserEmailDto[]> response = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, entity, UserEmailDto[].class);
+            
+            UserEmailDto[] dtoList = response.getBody();
+            return dtoList != null ? java.util.Arrays.asList(dtoList) : java.util.Collections.emptyList();
+        } catch (RestClientException e) {
+            log.error("Failed to fetch all users from auth-service: {}", e.getMessage());
+            return java.util.Collections.emptyList();
         }
     }
 }

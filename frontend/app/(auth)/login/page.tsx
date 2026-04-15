@@ -31,8 +31,11 @@ export default function LoginPage() {
         case "DOCTOR":
           router.push("/doctor/dashboard");
           break;
+        case "PATIENT":
+          router.push("/");
+          break;
         default:
-          router.push("/patient/dashboard");
+          router.push("/");
       }
     } catch (err: unknown) {
       const error = err as { message?: string };

@@ -31,7 +31,7 @@ public class Patient {
     @Column(nullable = false, unique = true)
     private UUID userId;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String fullName;
 
     private String phone;

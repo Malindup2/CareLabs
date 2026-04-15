@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,4 +27,13 @@ public class RegisterRequest {
 
     @NotNull(message = "Role is required")
     private Role role;
+
+    // Optional doctor bootstrap fields; ignored for non-doctor registrations.
+    private String fullName;
+    private String specialty;
+    private String slmcNumber;
+    private Integer experienceYears;
+    private String qualification;
+    private String bio;
+    private BigDecimal consultationFee;
 }

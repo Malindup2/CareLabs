@@ -41,6 +41,7 @@ public class EmailTemplateService {
             case DOC_APPROVED          -> "✅ Doctor Account Approved – CareLabs";
             case DOC_REJECTED          -> "❌ Doctor Verification Rejected – CareLabs";
             case PAYOUT_PROCESSED      -> "💵 Payout Processed – CareLabs";
+            case ANNOUNCEMENT          -> "📢 Platform Announcement – CareLabs";
         };
     }
 
@@ -62,6 +63,7 @@ public class EmailTemplateService {
             case DOC_APPROVED          -> buildDocApproved(data);
             case DOC_REJECTED          -> buildDocRejected(data);
             case PAYOUT_PROCESSED      -> buildPayoutProcessed(data);
+            case ANNOUNCEMENT          -> buildAnnouncement(data);
         };
         return wrapInShell(contentCard);
     }
@@ -707,6 +709,31 @@ public class EmailTemplateService {
                 infoRow("Account", "****" + get(data, "accountNumber").replaceAll(".*(.{4})$", "$1")),
                 calloutBox("✅ Your earnings have been transferred. "
                         + "Please allow 1–2 business days for the funds to appear in your account.", "#E6F4EA", SUCCESS)
+        );
+    }
+
+    /**
+     * ANNOUNCEMENT → sent to broad role (ALL, DOCTOR, PATIENT)
+     * extraData keys: title, message
+     */
+    private String buildAnnouncement(Map<String, String> data) {
+        return """
+            <table width="100%%" cellpadding="0" cellspacing="0">
+              %s
+              <tr><td style="padding:16px 36px 0;">
+                <p style="margin:0;color:%s;font-size:15px;line-height:1.7;">
+                   %s
+                </p>
+              </td></tr>
+              <tr><td style="padding:32px 36px 32px;">
+                %s
+              </td></tr>
+            </table>
+            """.formatted(
+                sectionHeading("📢", get(data, "title"), PRIMARY),
+                TEXT_DARK,
+                get(data, "message"),
+                button("Visit Dashboard", "http://localhost:3000/dashboard", PRIMARY)
         );
     }
 }
