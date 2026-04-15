@@ -17,7 +17,7 @@ export default function PatientSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 hidden md:flex shrink-0 flex-col" suppressHydrationWarning>
+    <aside className="w-64 bg-slate-900 border-r border-slate-800 hidden md:flex shrink-0 flex-col h-screen sticky top-0" suppressHydrationWarning>
       <div className="p-6 border-b border-slate-800">
         <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
            <div className="h-10 w-10 overflow-hidden rounded-xl flex items-center justify-center">

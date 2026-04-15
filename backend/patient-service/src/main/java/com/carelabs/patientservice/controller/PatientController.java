@@ -120,4 +120,10 @@ public class PatientController {
         UUID userId = currentUserService.getCurrentUserId();
         return patientService.getMedicalHistory(userId);
     }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping
+    public List<PatientProfileResponse> getAllPatients() {
+        return patientService.getAllPatients();
+    }
 }

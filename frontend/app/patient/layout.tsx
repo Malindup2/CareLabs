@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import PatientSidebar from "@/components/PatientSidebar";
 import FloatingChatbot from "@/components/FloatingChatbot";
 import { apiGetAuth, clearAuth, getToken } from "@/lib/api";
+import NotificationBell from "@/components/NotificationBell";
 
 const routeTitles: Record<string, string> = {
   "/patient/dashboard": "Dashboard",
@@ -59,6 +60,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
               <p className="text-sm font-bold text-slate-900">{patientName || "Patient"}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">PT</div>
+            <NotificationBell />
             <button
               type="button"
               onClick={() => { clearAuth(); window.location.href = "/login"; }}
