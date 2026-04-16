@@ -106,23 +106,39 @@
    - Copy `application-example.yml` to `application.yml`
    - Update database credentials and other sensitive config values
 
-4. **Run each service:**
+4. **Run the stack (Automated - RECOMMENDED):**
+   ```powershell
+   # This will build all JARs and start the entire Docker stack automatically
+   .\start-project.ps1
+   ```
+
+5. **Run each service (Manual - NOT RECOMMENDED):**
    ```bash
    # Start the API Gateway first
    cd api-gateway && ./mvnw spring-boot:run
-
-   # Then start each microservice (in separate terminals)
-   cd auth-service && ./mvnw spring-boot:run
-   cd patient-service && ./mvnw spring-boot:run
-   cd doctor-service && ./mvnw spring-boot:run
-   cd appointments && ./mvnw spring-boot:run
-   cd notification-service && ./mvnw spring-boot:run
-   cd payment-service && ./mvnw spring-boot:run
+   
+   # ... (and so on)
    ```
 
 ---
 
-## API Endpoints
+##  Docker & Kubernetes
+
+### Docker Compose
+The platform is fully orchestrated using **Docker Compose**. All 8 microservices, along with PostgreSQL, Kafka, and Zookeeper, can be started with a single command.
+
+```bash
+docker-compose up --build
+```
+
+### Kubernetes
+Production-ready Kubernetes manifests are available in the `backend/k8s/` directory. These manifests are pre-configured for local or cloud deployment.
+
+To deploy to a Kubernetes cluster:
+```bash
+kubectl apply -f k8s/configmap-secret.yaml
+kubectl apply -f k8s/
+```
 
 All requests go through the **API Gateway** at `http://localhost:8080`.
 

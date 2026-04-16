@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: ai-symptom-service
-        image: <your-dockerhub-username>/carelabs-ai-symptom-service:latest
+        image: carelabs/ai-symptom-service:latest
         ports:
         - containerPort: 8088
         envFrom:

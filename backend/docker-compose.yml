@@ -2,6 +2,7 @@
 version: '3.8'
 
 services:
+  # ─── Infrastructure Layer ────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: carelabs-postgres
@@ -9,10 +10,15 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: rootpassword
     ports:
-      - "5433:5432"
+      - "5433:5432" # Host port 5433 to avoid conflicts, container port 5432
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -49,6 +55,134 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+  # ─── Microservices Layer ──────────────────────────────────────────────────
+  auth-service:
+    build: ./auth-service
+    container_name: carelabs-auth-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_auth
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+
+  patient-service:
+    build: ./patient-service
+    container_name: carelabs-patient-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_patients
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      INTEGRATION_AUTH_SERVICE_BASE_URL: http://auth-service:8081
+
+  doctor-service:
+    build: ./doctor-service
+    container_name: carelabs-doctor-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_doctors
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+
+  appointments-service:
+    build: ./appointments-service
+    container_name: carelabs-appointments-service
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_appointments
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      INTEGRATION_AUTH_SERVICE_BASE_URL: http://auth-service:8081
+      INTEGRATION_PATIENT_SERVICE_BASE_URL: http://patient-service:8082
+      INTEGRATION_DOCTOR_SERVICE_BASE_URL: http://doctor-service:8083
+
+  notification-service:
+    build: ./notification-service
+    container_name: carelabs-notification-service
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_notifications
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SERVICES_AUTH_URL: http://auth-service:8081
+      SERVICES_APPOINTMENT_URL: http://appointments-service:8084
+
+  payment-service:
+    build: ./payment-service
+    container_name: carelabs-payment-service
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_payments
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+  ai-symptom-service:
+    build: ./ai-symptom-service
+    container_name: carelabs-ai-symptom-service
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_APPLICATION_NAME: ai-symptom-service
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: carelabs-api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - patient-service
+      - doctor-service
+      - appointments-service
+    environment:
+      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://auth-service:8081
+      SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://patient-service:8082
+      SPRING_CLOUD_GATEWAY_ROUTES_2_URI: http://doctor-service:8083
+      SPRING_CLOUD_GATEWAY_ROUTES_3_URI: http://doctor-service:8083
+      SPRING_CLOUD_GATEWAY_ROUTES_4_URI: http://appointments-service:8084
+      SPRING_CLOUD_GATEWAY_ROUTES_5_URI: http://notification-service:8086
+      SPRING_CLOUD_GATEWAY_ROUTES_6_URI: http://payment-service:8087
+      SPRING_CLOUD_GATEWAY_ROUTES_7_URI: http://ai-symptom-service:8088
 
 volumes:
   postgres-data:
