@@ -34,11 +34,14 @@ public class PaymentStatusConsumer {
         if ("SUCCESS".equalsIgnoreCase(event.getStatus())) {
             appointment.setStatus(AppointmentStatus.CONFIRMED);
             appointmentRepository.save(appointment);
-            log.info("Appointment {} confirmed via successful payment.", event.getAppointmentId());
+            log.info("GATEWAY CHECK - Appointment {} CONFIRMED via successful payment.", event.getAppointmentId());
+        } else if ("FAILED".equalsIgnoreCase(event.getStatus())) {
+            appointment.setStatus(AppointmentStatus.CANCELLED);
+            appointmentRepository.save(appointment);
+            log.info("GATEWAY CHECK - Appointment {} CANCELLED due to failed payment.", event.getAppointmentId());
         } else {
-            log.info("Payment failed for appointment {}. Current status remains {}.", 
-                    event.getAppointmentId(), appointment.getStatus());
-            // Optionally: appointment.setStatus(AppointmentStatus.CANCELLED);
+            log.info("GATEWAY CHECK - Payment event for appointment {} has status: {}. No action taken.", 
+                    event.getAppointmentId(), event.getStatus());
         }
     }
 }
