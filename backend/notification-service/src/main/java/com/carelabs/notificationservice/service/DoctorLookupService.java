@@ -46,5 +46,6 @@ public class DoctorLookupService {
         private UUID id;
         private UUID userId;
         private String fullName;
+        private String specialty;
     }
 }

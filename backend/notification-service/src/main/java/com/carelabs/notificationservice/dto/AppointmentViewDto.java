@@ -20,4 +20,6 @@ public class AppointmentViewDto {
     private String status;
     private String type;
     private String reason;
+    private String meetingLink;
+    private java.math.BigDecimal consultationFee;
 }

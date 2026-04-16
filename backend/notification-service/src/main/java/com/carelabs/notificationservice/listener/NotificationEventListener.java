@@ -12,6 +12,7 @@ import com.carelabs.notificationservice.service.NotificationService;
 import com.carelabs.notificationservice.service.UserLookupService;
 import com.carelabs.notificationservice.service.DoctorLookupService;
 import com.carelabs.notificationservice.service.PatientLookupService;
+import com.carelabs.notificationservice.service.PaymentLookupService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -31,6 +32,7 @@ public class NotificationEventListener {
     private final AppointmentLookupService appointmentLookupService;
     private final DoctorLookupService doctorLookupService;
     private final PatientLookupService patientLookupService;
+    private final PaymentLookupService paymentLookupService;
 
     @KafkaListener(topics = "appointment-events", groupId = "notification-group-v2")
     public void handleAppointmentBooked(AppointmentBookedEvent event) {
@@ -51,7 +53,7 @@ public class NotificationEventListener {
         // Resolve Patient profile first for the name
         var patientProfile = patientLookupService.getPatientByUserId(appointment.getPatientId());
         
-        // Resolve Doctor profile first for the name
+        // Resolve Doctor profile for the specialty
         var doctorProfile = doctorLookupService.getDoctorById(appointment.getDoctorId());
         UserEmailDto doctor = null;
         UUID doctorUserId = appointment.getDoctorId();
@@ -61,14 +63,27 @@ public class NotificationEventListener {
             doctor = userLookupService.getUserById(doctorUserId);
         }
 
+        // Resolve Payment details for receipt
+        var payment = paymentLookupService.getPaymentByAppointmentId(appointment.getId());
+
         Map<String, String> data = new HashMap<>();
         data.put("doctorName", (doctorProfile != null && doctorProfile.getFullName() != null) 
                 ? doctorProfile.getFullName() 
                 : (doctor != null ? doctor.getFullName() : "Doctor"));
+        data.put("doctorSpecialty", doctorProfile != null ? doctorProfile.getSpecialty() : "General Physician");
         data.put("patientName", (patientProfile != null && patientProfile.getFullName() != null) 
                 ? patientProfile.getFullName() 
                 : "Patient");
         data.put("appointmentTime", appointment.getAppointmentTime().toString());
+        data.put("appointmentType", appointment.getType());
+        data.put("reason", appointment.getReason());
+        data.put("meetingLink", appointment.getMeetingLink() != null ? appointment.getMeetingLink() : "N/A");
+        
+        // Payment related data
+        data.put("transactionId", payment != null ? payment.getTransactionId() : (event.getTransactionId() != null ? event.getTransactionId() : "N/A"));
+        data.put("paymentMethod", payment != null ? payment.getPaymentMethod() : "Online Payment");
+        data.put("amount", payment != null ? payment.getAmount().toString() : (appointment.getConsultationFee() != null ? appointment.getConsultationFee().toString() : "0.00"));
+        data.put("currency", payment != null ? payment.getCurrency() : "LKR");
 
         if ("SUCCESS".equalsIgnoreCase(event.getStatus())) {
             // 1. Notify Patient of Payment Success
