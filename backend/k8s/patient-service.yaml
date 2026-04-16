@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: patient-service
-        image: <your-dockerhub-username>/carelabs-patient-service:latest
+        image: carelabs/patient-service:latest
         ports:
         - containerPort: 8082
         envFrom:

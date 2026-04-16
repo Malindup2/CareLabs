@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -246,7 +248,11 @@ function submitPayHereCheckout(payload: PayHereCheckoutResponse) {
   form.submit();
 }
 
-export default function AppointmentsHubPage() {
+import { Suspense } from "react";
+
+// Existing imports... (no changes to imports needed as they are already there)
+
+function AppointmentsHubContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -1267,6 +1273,21 @@ export default function AppointmentsHubPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function AppointmentsHubPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Activity className="w-12 h-12 text-blue-600 animate-spin" />
+          <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Loading Appointments Hub...</p>
+        </div>
+      </div>
+    }>
+      <AppointmentsHubContent />
+    </Suspense>
   );
 }
 

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: notification-service
-        image: <your-dockerhub-username>/carelabs-notification-service:latest
+        image: carelabs/notification-service:latest
         ports:
         - containerPort: 8086
         envFrom:

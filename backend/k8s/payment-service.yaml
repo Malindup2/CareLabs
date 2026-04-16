@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: payment-service
-        image: <your-dockerhub-username>/carelabs-payment-service:latest
+        image: carelabs/payment-service:latest
         ports:
         - containerPort: 8085
         envFrom:

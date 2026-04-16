@@ -131,33 +131,39 @@ git clone https://github.com/malindup2/carelabs.git
 cd carelabs
 ```
 
-### 2. Backend setup
+### 2. Launch Entire Platform (Automated - RECOMMENDED)
 
-> See [backend/README.md](./backend/README.md) for full details.
+This is the fastest and most professional way to start the system. It handles all building and orchestration in one command.
 
+```powershell
+# Build all backend services and launch the full stack (Frontend + Backend + DBs)
+.\start-all.ps1
+```
+
+> [!NOTE]
+> The automated script requires **Docker Desktop** and **Maven** to be installed on your machine.
+> All databases and messaging infrastructure will be started automatically.
+
+---
+
+### Alternative Manual Setup (Development Mode)
+
+If you wish to run the services individually for focused development:
+
+#### A. Backend Setup
+1. **Create Databases**: See the SQL commands in `backend/README.md`.
+2. **Configure Services**: Copy `application-example.yml` to `application.yml` in each service folder.
+3. **Run Services**:
+   ```bash
+   cd backend/api-gateway && ./mvnw spring-boot:run
+   # ... (start each microservice in separate terminals)
+   ```
+
+#### B. Frontend Setup
 ```bash
-# Create PostgreSQL databases
-psql -U postgres -c "CREATE DATABASE carelabs_auth;"
-psql -U postgres -c "CREATE DATABASE carelabs_patients;"
-psql -U postgres -c "CREATE DATABASE carelabs_doctors;"
-psql -U postgres -c "CREATE DATABASE carelabs_appointments;"
-psql -U postgres -c "CREATE DATABASE carelabs_payments;"
-
-# For each service, copy the example config and fill in your values
-# Path: backend/<service-name>/src/main/resources/
-cp application-example.yml application.yml
-
-# Start the API Gateway first
-cd backend/api-gateway && ./mvnw spring-boot:run
-
-# Then start each microservice in separate terminals
-cd backend/auth-service    && ./mvnw spring-boot:run
-cd backend/patient-service && ./mvnw spring-boot:run
-cd backend/doctor-service  && ./mvnw spring-boot:run
-cd backend/appointments-service  && ./mvnw spring-boot:run
-cd backend/notification-service  && ./mvnw spring-boot:run
-cd backend/payment-service       && ./mvnw spring-boot:run
-cd backend/ai-symptom-service    && ./mvnw spring-boot:run
+cd frontend
+npm install
+npm run dev
 ```
 
 ### 3. Frontend setup

@@ -11,7 +11,6 @@ Desktop.ini
 *.iws
 *.iml
 *.ipr
-.vscode/
 *.suo
 *.user
 *.sln.docstates
@@ -47,8 +46,6 @@ frontend/out/
 frontend/.vercel/
 
 # ── Environment / Secrets ───────────────────
-.env
-.env.*
 !.env.example
 !**/.env.example
 
@@ -78,3 +75,4 @@ logs/
 # ── Generated Project Tracking ───────────────
 tracking/*.md
 
+config.bat

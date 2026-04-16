@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: <your-dockerhub-username>/carelabs-auth-service:latest
+        image: carelabs/auth-service:latest
         ports:
         - containerPort: 8081
         envFrom:

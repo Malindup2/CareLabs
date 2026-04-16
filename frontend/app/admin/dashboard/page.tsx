@@ -867,7 +867,7 @@ export default function AdminCommandCenter() {
         cancelLabel="Abort"
         onCancel={() => !isDeleting && setShowDeleteConfirm(false)}
         onConfirm={handleDeleteUser}
-        danger
+        confirmTone="danger"
       />
 
       <ConfirmDialog
