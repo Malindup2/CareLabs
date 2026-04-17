@@ -43,4 +43,4 @@ payhere:
   merchant-id: 1234826
   merchant-secret: MzIzODQ4OTExNzE3ODgzMzQ0NTA5MjU5NjI1NTYzMDQ5NDgyMDc1
   currency: LKR
-  notify-url: ${PAYHERE_NOTIFY_URL:https://timid-obligate-erasure.ngrok-free.dev/payments/notify}
+  notify-url: ${PAYHERE_NOTIFY_URL:https://shriek-diabetes-emote.ngrok-free.dev/payments/notify}

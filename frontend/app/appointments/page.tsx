@@ -461,6 +461,56 @@ function AppointmentsHubContent() {
     }
   }, [searchParams]);
 
+  // Poll for payment confirmation after returning from PayHere
+  useEffect(() => {
+    const paymentComplete = searchParams.get("paymentComplete");
+    const orderId = searchParams.get("orderId");
+
+    if (!paymentComplete || !orderId || !token) return;
+
+    let attempts = 0;
+    const maxAttempts = 15; // poll for up to ~30s
+    toast.success("Payment received. Confirming your appointment...");
+
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const payment = await apiGetAuth<{ status: string }>(`/payments/verify/${orderId}`, token);
+        if (payment.status === "SUCCESS") {
+          clearInterval(interval);
+          await refreshAppointments();
+          toast.success("Appointment confirmed!");
+          // Clean up URL params without reloading
+          const url = new URL(window.location.href);
+          url.searchParams.delete("paymentComplete");
+          url.searchParams.delete("orderId");
+          window.history.replaceState({}, "", url.toString());
+        } else if (payment.status === "FAILED") {
+          clearInterval(interval);
+          toast.error("Payment was not successful. Please try again.");
+          const url = new URL(window.location.href);
+          url.searchParams.delete("paymentComplete");
+          url.searchParams.delete("orderId");
+          window.history.replaceState({}, "", url.toString());
+        }
+      } catch {
+        // silently retry
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        toast.error("Payment confirmation is taking longer than expected. Please refresh the page in a moment.");
+        const url = new URL(window.location.href);
+        url.searchParams.delete("paymentComplete");
+        url.searchParams.delete("orderId");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, token]);
+
   useEffect(() => {
     if (!token || role !== "PATIENT") return;
     if (!appointmentForm.doctorId) {

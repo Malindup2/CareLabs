@@ -34,8 +34,12 @@ export default function FloatingChatbot() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const token = getToken();
+
+  useEffect(() => {
+    setToken(getToken());
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {

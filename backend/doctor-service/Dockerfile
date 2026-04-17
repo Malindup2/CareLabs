@@ -1,14 +1,11 @@
-# Use an official lightweight Java 17 runtime
-FROM eclipse-temurin:17-jdk-alpine
-
-# Set the working directory inside the container
+FROM maven:3.9-eclipse-temurin-17-alpine AS build
 WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN --mount=type=cache,target=/root/.m2 mvn package -DskipTests -q
 
-# Copy the built jar file into the container
-COPY target/*.jar app.jar
-
-# Expose the port the service runs on
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8083
-
-# Run the Spring Boot application
 ENTRYPOINT ["java", "-jar", "app.jar"]

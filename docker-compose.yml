@@ -54,9 +54,11 @@ services:
       - "8081:8081"
     environment:
       SPRING_APPLICATION_NAME: auth-service
+      SERVER_PORT: 8081
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_auth
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
       JWT_EXPIRATION: 86400000
@@ -73,12 +75,17 @@ services:
       - "8082:8082"
     environment:
       SPRING_APPLICATION_NAME: patient-service
+      SERVER_PORT: 8082
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_patients
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       INTEGRATION_AUTH_SERVICE_BASE_URL: http://auth-service:8081
       JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      CLOUDINARY_CLOUD_NAME: dpt2jyif5
+      CLOUDINARY_API_KEY: 791878353926865
+      CLOUDINARY_API_SECRET: AF5KmtdawbrBU0V8cIh6xguF3pg
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,11 +99,16 @@ services:
       - "8083:8083"
     environment:
       SPRING_APPLICATION_NAME: doctor-service
+      SERVER_PORT: 8083
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_doctors
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      CLOUDINARY_CLOUD_NAME: dpt2jyif5
+      CLOUDINARY_API_KEY: 791878353926865
+      CLOUDINARY_API_SECRET: AF5KmtdawbrBU0V8cIh6xguF3pg
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,9 +127,11 @@ services:
         condition: service_started
     environment:
       SPRING_APPLICATION_NAME: appointments-service
+      SERVER_PORT: 8084
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_appointments
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       INTEGRATION_AUTH_SERVICE_BASE_URL: http://auth-service:8081
       INTEGRATION_PATIENT_SERVICE_BASE_URL: http://patient-service:8082
@@ -136,13 +150,23 @@ services:
         condition: service_started
     environment:
       SPRING_APPLICATION_NAME: notification-service
+      SERVER_PORT: 8086
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_notifications
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SERVICES_AUTH_URL: http://auth-service:8081
       SERVICES_APPOINTMENT_URL: http://appointments-service:8084
       JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      SPRING_MAIL_HOST: smtp.gmail.com
+      SPRING_MAIL_PORT: 587
+      SPRING_MAIL_USERNAME: wanjulasd2@gmail.com
+      SPRING_MAIL_PASSWORD: lpszblbkahqjdakr
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: true
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: true
+      APP_MAIL_FROM: wanjulasd2@gmail.com
+      APP_MAIL_FROM_NAME: CareLabs Platform
 
   payment-service:
     build: ./backend/payment-service
@@ -160,6 +184,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_payments
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       APPOINTMENTS_SERVICE_BASE_URL: http://appointments-service:8084
       JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
@@ -171,13 +196,14 @@ services:
       - "8088:8088"
     environment:
       SPRING_APPLICATION_NAME: ai-symptom-service
+      SERVER_PORT: 8088
       JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
 
   api-gateway:
     build: ./backend/api-gateway
     container_name: carelabs-api-gateway
     ports:
-      - "8080:8080"
+      - "8090:8080"
     depends_on:
       - auth-service
       - patient-service
@@ -189,23 +215,24 @@ services:
       SPRING_CLOUD_GATEWAY_ROUTES_0_ID: auth-service
       SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://auth-service:8081
       SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0: Path=/auth,/auth/**
-      # Patient Root
+      # Patient Routes (Protected)
       SPRING_CLOUD_GATEWAY_ROUTES_1_ID: patient-service
       SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://patient-service:8082
-      SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0: Path=/patients/me,/patients/me/**
+      SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0: Path=/patients,/patients/**
       SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0_NAME: JwtAuthenticationFilter
       SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0_ARGS_REQUIRED_ROLES_0: PATIENT
+      SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0_ARGS_REQUIRED_ROLES_1: ADMIN
       # Doctor Routes (Protected)
       SPRING_CLOUD_GATEWAY_ROUTES_2_ID: doctor-service-protected
       SPRING_CLOUD_GATEWAY_ROUTES_2_URI: http://doctor-service:8083
-      SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0: Path=/doctors/me,/doctors/me/**,/doctors/documents/**,/doctors/availability/**,/doctors/leave/**,/doctors/admin/**,/doctors/*/verify
+      SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0: Path=/doctors/me,/doctors/me/**,/doctors/documents,/doctors/documents/**,/doctors/availability,/doctors/availability/**,/doctors/leave,/doctors/leave/**,/doctors/admin/**
       SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0_NAME: JwtAuthenticationFilter
       SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0_ARGS_REQUIRED_ROLES_0: DOCTOR
       SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0_ARGS_REQUIRED_ROLES_1: ADMIN
       # Doctor Routes (Public Access)
       SPRING_CLOUD_GATEWAY_ROUTES_3_ID: doctor-service-public
       SPRING_CLOUD_GATEWAY_ROUTES_3_URI: http://doctor-service:8083
-      SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0: Path=/doctors,/doctors/specialties,/doctors/search,/doctors/view/*
+      SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0: Path=/doctors,/doctors/public/**,/doctors/*,/doctors/*/availability
       # Appointments
       SPRING_CLOUD_GATEWAY_ROUTES_4_ID: appointments-service
       SPRING_CLOUD_GATEWAY_ROUTES_4_URI: http://appointments-service:8084
@@ -233,25 +260,29 @@ services:
       SPRING_CLOUD_GATEWAY_ROUTES_7_FILTERS_0_NAME: JwtAuthenticationFilter
       SPRING_CLOUD_GATEWAY_ROUTES_7_FILTERS_0_ARGS_REQUIRED_ROLES_0: PATIENT
       SPRING_CLOUD_GATEWAY_ROUTES_7_FILTERS_0_ARGS_REQUIRED_ROLES_1: ADMIN
-      # AI Symptom
+      # AI Symptom — controller maps to /ai, endpoint is /ai/symptom-check
       SPRING_CLOUD_GATEWAY_ROUTES_8_ID: ai-symptom-service
       SPRING_CLOUD_GATEWAY_ROUTES_8_URI: http://ai-symptom-service:8088
-      SPRING_CLOUD_GATEWAY_ROUTES_8_PREDICATES_0: Path=/ai-symptom,/ai-symptom/**
+      SPRING_CLOUD_GATEWAY_ROUTES_8_PREDICATES_0: Path=/ai,/ai/**
       SPRING_CLOUD_GATEWAY_ROUTES_8_FILTERS_0_NAME: JwtAuthenticationFilter
       SPRING_CLOUD_GATEWAY_ROUTES_8_FILTERS_0_ARGS_REQUIRED_ROLES_0: PATIENT
+      SPRING_CLOUD_GATEWAY_ROUTES_8_FILTERS_0_ARGS_REQUIRED_ROLES_1: DOCTOR
+      SPRING_CLOUD_GATEWAY_ROUTES_8_FILTERS_0_ARGS_REQUIRED_ROLES_2: ADMIN
       # Security
       JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
 
   # ─── Frontend Layer ──────────────────────────────────────────────────────
-  frontend:
-    build: ./frontend
-    container_name: carelabs-frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - api-gateway
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8080
+  # Frontend is run locally: cd frontend && npm install && npm run dev
+  # npm install inside Docker fails on Windows Docker Desktop due to network (ECONNRESET).
+  # frontend:
+  #   build: ./frontend
+  #   container_name: carelabs-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - api-gateway
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:8080
 
 volumes:
   postgres-data:
