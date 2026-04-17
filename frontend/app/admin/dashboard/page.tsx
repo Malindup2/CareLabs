@@ -282,7 +282,7 @@ export default function AdminCommandCenter() {
     try {
       const q = new URLSearchParams({ status });
       if (status === "REJECTED") q.set("rejectionReason", rejectionReason);
-      const updated = await apiPutAuth<Doctor>(`/doctors/${selectedDoctorId}/verify?${q.toString()}`, {}, token);
+      const updated = await apiPutAuth<Doctor>(`/doctors/admin/${selectedDoctorId}/verify?${q.toString()}`, {}, token);
       setDoctors(prev => prev.map(d => d.id === updated.id ? updated : d));
       toast.success(`Doctor ${status.toLowerCase()} successfully.`);
       setRejectionReason("");

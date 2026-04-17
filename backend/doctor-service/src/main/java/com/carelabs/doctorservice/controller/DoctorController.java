@@ -155,7 +155,7 @@ public class DoctorController {
         return ResponseEntity.ok(doctorService.updateLeave(userId, id, leave));
     }
 
-    @PutMapping("/{id}/verify")
+    @PutMapping("/admin/{id}/verify")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Doctor> verifyDoctor(
             @PathVariable UUID id,

@@ -83,8 +83,8 @@ public class PaymentService {
         //Return the complete package to the React frontend
         return PayHereCheckoutResponse.builder()
                 .merchantId(merchantId)
-            .returnUrl(frontendBaseUrl + "/patient/appointments")
-            .cancelUrl(frontendBaseUrl + "/patient/appointments")
+            .returnUrl(frontendBaseUrl + "/patient/appointments?paymentComplete=true&orderId=" + orderId)
+            .cancelUrl(frontendBaseUrl + "/patient/appointments?paymentCancelled=true")
                 .notifyUrl(notifyUrl) 
             .checkoutUrl(sandboxMode ? "https://sandbox.payhere.lk/pay/checkout" : "https://www.payhere.lk/pay/checkout")
                 .orderId(orderId)

@@ -27,7 +27,7 @@ spring:
         - id: doctor-service-protected
           uri: http://localhost:8083
           predicates:
-            - Path=/doctors/me,/doctors/me/**,/doctors/documents/**,/doctors/availability/**,/doctors/leave/**,/doctors/admin/**,/doctors/*/verify
+            - Path=/doctors/me,/doctors/me/**,/doctors/documents,/doctors/documents/**,/doctors/availability,/doctors/availability/**,/doctors/leave,/doctors/leave/**,/doctors/admin/**
 
         - id: doctor-service-public
           uri: http://localhost:8083

@@ -28,7 +28,7 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.GET, "/doctors", "/doctors/*", "/doctors/*/availability").permitAll()
+                .requestMatchers(HttpMethod.GET, "/doctors", "/doctors/public/**", "/doctors/*", "/doctors/*/availability").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
