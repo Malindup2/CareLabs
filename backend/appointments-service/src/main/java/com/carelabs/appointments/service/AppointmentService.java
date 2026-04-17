@@ -277,6 +277,29 @@ public class AppointmentService {
         return chatMessageRepository.findByAppointmentIdOrderBySentAtAsc(appointmentId);
     }
 
+    public void markMessagesAsRead(UUID appointmentId, UUID receiverId) {
+        List<ChatMessage> unreadMessages = chatMessageRepository.findByAppointmentIdOrderBySentAtAsc(appointmentId)
+                .stream()
+                .filter(m -> !m.isRead() && !m.getSenderId().equals(receiverId))
+                .collect(Collectors.toList());
+
+        if (!unreadMessages.isEmpty()) {
+            unreadMessages.forEach(m -> m.setRead(true));
+            chatMessageRepository.saveAll(unreadMessages);
+        }
+    }
+
+    public List<UUID> getUnreadChatAppointmentsForUser(UUID userId) {
+        List<Appointment> userAppointments = appointmentRepository.findByPatientIdOrDoctorId(userId, userId);
+        return userAppointments.stream()
+                .filter(a -> {
+                    List<ChatMessage> messages = chatMessageRepository.findByAppointmentIdOrderBySentAtAsc(a.getId());
+                    return messages.stream().anyMatch(m -> !m.isRead() && !m.getSenderId().equals(userId));
+                })
+                .map(Appointment::getId)
+                .collect(Collectors.toList());
+    }
+
     public ConsultationNote saveNote(UUID appointmentId, ConsultationNote note) {
         getAppointmentById(appointmentId);
         return consultationNoteRepository.save(note);

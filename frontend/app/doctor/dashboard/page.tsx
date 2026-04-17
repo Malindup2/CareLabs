@@ -38,6 +38,8 @@ import {
   Pill,
   ChevronDown,
   FileDigit,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import Modal from "@/components/Modal";
@@ -153,6 +155,14 @@ interface SlotAllocationItem {
   reason?: string | null;
 }
 
+interface ChatMessage {
+  id?: string;
+  appointmentId: string;
+  senderId: string;
+  message: string;
+  sentAt?: string;
+}
+
 const dayOptions: Availability["dayOfWeek"][] = [
   "MONDAY",
   "TUESDAY",
@@ -229,6 +239,10 @@ export default function DoctorDashboardPage() {
   const [meetingLink, setMeetingLink] = useState<string>("");
   const [meetingLoading, setMeetingLoading] = useState(false);
   const [showJitsiPreview, setShowJitsiPreview] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatMessage, setChatMessage] = useState("");
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [unreadAppointments, setUnreadAppointments] = useState<string[]>([]);
 
   const [consultationNote, setConsultationNote] = useState({
     chiefComplaint: "",
@@ -431,6 +445,71 @@ export default function DoctorDashboardPage() {
         void refreshAppointments();
     }, 30000);
     return () => clearInterval(pollTimer);
+  }, [token, profile?.id]);
+
+  // Poll for new messages when chat is open
+  useEffect(() => {
+    if (!token || !selectedAppointmentId || !showChatModal) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const updated = await apiGetAuth<ChatMessage[]>(`/appointments/${selectedAppointmentId}/chat`, token);
+        setChatHistory(updated);
+      } catch (err) {
+        console.error("Failed to poll chat history", err);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [token, selectedAppointmentId, showChatModal]);
+
+  useEffect(() => {
+    if (!token || !selectedAppointmentId) return;
+
+    const loadChat = async () => {
+      try {
+        const history = await apiGetAuth<ChatMessage[]>(`/appointments/${selectedAppointmentId}/chat`, token);
+        setChatHistory(history);
+      } catch {
+        setChatHistory([]);
+      }
+    };
+    if (showChatModal) {
+      void loadChat();
+      void markAsRead();
+    }
+  }, [selectedAppointmentId, showChatModal, token]);
+
+  const markAsRead = async (id?: string) => {
+    const targetId = id || selectedAppointmentId;
+    if (!token || !targetId) return;
+    const userId = profile?.userId || profile?.id;
+    if (!userId) return;
+    try {
+      await apiPutAuth(`/appointments/${targetId}/chat/read?userId=${userId}`, {}, token);
+      setUnreadAppointments(prev => prev.filter(aId => aId !== targetId));
+    } catch (err) {
+      console.error("Failed to mark as read", err);
+    }
+  };
+
+  // Background poll for unread messages across all appointments
+  useEffect(() => {
+    if (!token || !profile?.id) return;
+    const userId = profile?.userId || profile?.id;
+
+    const checkUnread = async () => {
+      try {
+        const unreadIds = await apiGetAuth<string[]>(`/appointments/unread-chats?userId=${userId}`, token);
+        setUnreadAppointments(unreadIds);
+      } catch (err) {
+        console.error("Failed to check unread chats", err);
+      }
+    };
+
+    const interval = setInterval(checkUnread, 10000); // Check every 10 seconds
+    void checkUnread();
+    return () => clearInterval(interval);
   }, [token, profile?.id]);
 
   useEffect(() => {
@@ -806,6 +885,30 @@ export default function DoctorDashboardPage() {
     } catch (err: unknown) {
       const e = err as { message?: string };
       toast.error(e.message || "Unable to update appointment status", { id: loadingToast });
+    }
+  };
+
+  const handleSendChat = async () => {
+    if (!token || !selectedAppointmentId || !chatMessage.trim()) return;
+
+    const senderId = profile?.userId || profile?.id || "";
+
+    try {
+      await apiPostAuth<ChatMessage>(
+        `/appointments/${selectedAppointmentId}/chat`,
+        {
+          senderId,
+          message: chatMessage.trim(),
+        },
+        token,
+      );
+      setChatMessage("");
+      const updated = await apiGetAuth<ChatMessage[]>(`/appointments/${selectedAppointmentId}/chat`, token);
+      setChatHistory(updated);
+      toast.success("Message sent.");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      toast.error(error.message || "Unable to send message");
     }
   };
 
@@ -2103,6 +2206,19 @@ export default function DoctorDashboardPage() {
                                         >
                                            <Pill className="w-4 h-4" />
                                         </button>
+                                        <button 
+                                          onClick={() => {
+                                            setSelectedAppointmentId(a.id);
+                                            setShowChatModal(true);
+                                          }}
+                                          className="relative p-2.5 rounded-xl border border-slate-200 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all active:scale-95"
+                                          title="Patient Chat"
+                                        >
+                                           <MessageSquare className="w-4 h-4" />
+                                           {unreadAppointments.includes(a.id) && (
+                                              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white animate-pulse" />
+                                           )}
+                                        </button>
                                      </div>
                                   </td>
                                </tr>
@@ -2114,7 +2230,6 @@ export default function DoctorDashboardPage() {
                </div>
             </div>
 
-            {/* Documentation Modals */}
             <Modal isOpen={isNoteModalOpen} onClose={() => setIsNoteModalOpen(false)} title="Clinical Observation Session">
                <form onSubmit={handleSaveConsultationNote} className="space-y-6">
                   <div className="p-4 rounded-3xl bg-blue-50 border border-blue-100 flex items-center justify-between">
@@ -2213,6 +2328,86 @@ export default function DoctorDashboardPage() {
                      </button>
                   </div>
                </form>
+            </Modal>
+
+            <Modal
+              isOpen={showChatModal}
+              onClose={() => setShowChatModal(false)}
+              title="Secure Patient Communication"
+            >
+              <div className="flex flex-col h-[600px] bg-slate-50 rounded-[2rem] overflow-hidden border border-slate-200">
+                <div className="px-6 py-4 bg-white border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Secure Patient Context</p>
+                      <p className="text-sm font-black text-slate-900 truncate max-w-[200px] uppercase tracking-tight">
+                        {selectedAppointment?.patientFullName || "Loading Clinical Context..."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">Encrypted Channel</span>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">Live Synchronization</p>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+                  {chatHistory.length > 0 ? (
+                    chatHistory.map((msg, idx) => {
+                      const isMe = msg.senderId === (profile?.userId || profile?.id);
+                      return (
+                        <div key={idx} className={`flex ${isMe ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                          <div className={`max-w-[80%] px-5 py-4 rounded-[1.8rem] text-sm font-medium shadow-sm ${
+                            isMe 
+                              ? "bg-slate-900 text-white rounded-tr-none" 
+                              : "bg-white text-slate-900 border border-slate-100 rounded-tl-none"
+                          }`}>
+                            <p className="leading-relaxed">{msg.message}</p>
+                            <p className={`text-[9px] mt-2 font-black uppercase tracking-widest ${isMe ? "text-slate-400" : "text-slate-400"}`}>
+                              {msg.sentAt ? new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Sending..."}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
+                      <div className="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center mb-4">
+                        <MessageSquare className="w-10 h-10 text-slate-400" />
+                      </div>
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-500 leading-relaxed"> No messages in this <br /> clinical context yet.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-6 bg-white border-t border-slate-100">
+                  <form 
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void handleSendChat();
+                    }}
+                    className="relative group"
+                  >
+                    <input
+                      value={chatMessage}
+                      onChange={(e) => setChatMessage(e.target.value)}
+                      placeholder="Type clinical inquiry or update..."
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-6 pr-16 py-4 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-slate-300"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!chatMessage.trim()}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-3 rounded-xl bg-slate-900 text-white hover:bg-blue-600 transition-all disabled:opacity-20 active:scale-95"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase text-center mt-4 tracking-widest">Shift + Enter for new line. Messages are logged for clinical audit.</p>
+                </div>
+              </div>
             </Modal>
           </div>
         )}
