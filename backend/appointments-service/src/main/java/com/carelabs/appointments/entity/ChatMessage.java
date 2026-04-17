@@ -35,4 +35,7 @@ public class ChatMessage {
     private String message;
 
     private LocalDateTime sentAt;
+
+    @Column(nullable = false)
+    private boolean isRead = false;
 }

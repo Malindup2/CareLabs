@@ -195,6 +195,19 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getChatHistory(id));
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
+    @PutMapping("/{id}/chat/read")
+    public ResponseEntity<Void> markAsRead(@PathVariable UUID id, @RequestParam UUID userId) {
+        appointmentService.markMessagesAsRead(id, userId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
+    @GetMapping("/unread-chats")
+    public ResponseEntity<List<UUID>> getUnreadChatAppointments(@RequestParam UUID userId) {
+        return ResponseEntity.ok(appointmentService.getUnreadChatAppointmentsForUser(userId));
+    }
+
     //Save a Consultation Note
     @PreAuthorize("hasRole('ADMIN') or hasRole('DOCTOR')")
     @PostMapping("/{id}/notes")
