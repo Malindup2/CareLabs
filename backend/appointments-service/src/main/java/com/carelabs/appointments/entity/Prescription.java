@@ -25,7 +25,7 @@ public class Prescription {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private UUID appointmentId;
 
     @Column(nullable = false)
@@ -40,5 +40,5 @@ public class Prescription {
     private String notes;
 
     @jakarta.persistence.OneToMany(mappedBy = "prescription", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
-    private java.util.List<PrescriptionItem> items;
+    private java.util.List<PrescriptionItem> items = new java.util.ArrayList<>();
 }

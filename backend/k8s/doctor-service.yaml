@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: doctor-service
-        image: <your-dockerhub-username>/carelabs-doctor-service:latest
+        image: carelabs/carelabs-doctor-service:latest
         ports:
         - containerPort: 8083
         envFrom:
@@ -22,6 +22,9 @@ spec:
             name: shared-config
         - secretRef:
             name: shared-secret
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres-service:5432/carelabs_doctors"
 ---
 apiVersion: v1
 kind: Service

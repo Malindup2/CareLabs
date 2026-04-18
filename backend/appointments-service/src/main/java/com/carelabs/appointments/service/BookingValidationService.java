@@ -88,6 +88,28 @@ public class BookingValidationService {
         return "Unknown Patient";
     }
 
+    public java.time.LocalDate getPatientDob(UUID patientId) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Auth-User-Id", patientId.toString());
+            headers.set("X-Auth-Role", "DOCTOR");
+
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    patientServiceBaseUrl + "/patients/internal/" + patientId,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    Map.class
+            );
+            Map<?, ?> body = response.getBody();
+            if (body != null && body.get("dateOfBirth") != null) {
+                return java.time.LocalDate.parse(String.valueOf(body.get("dateOfBirth")));
+            }
+        } catch (Exception e) {
+            // DOB lookup failed
+        }
+        return null;
+    }
+
     public String getDoctorFullName(UUID doctorId) {
         try {
             Map<?, ?> body = restTemplate.getForObject(doctorServiceBaseUrl + "/doctors/" + doctorId, Map.class);
@@ -98,5 +120,29 @@ public class BookingValidationService {
             // Named lookup failed - fallback to Doctor
         }
         return "Doctor";
+    }
+
+    public String getDoctorSpecialty(UUID doctorId) {
+        try {
+            Map<?, ?> body = restTemplate.getForObject(doctorServiceBaseUrl + "/doctors/" + doctorId, Map.class);
+            if (body != null && body.get("specialty") != null) {
+                return String.valueOf(body.get("specialty"));
+            }
+        } catch (Exception e) {
+            // Fallback
+        }
+        return "General Practitioner";
+    }
+
+    public String getDoctorQualification(UUID doctorId) {
+        try {
+            Map<?, ?> body = restTemplate.getForObject(doctorServiceBaseUrl + "/doctors/" + doctorId, Map.class);
+            if (body != null && body.get("qualification") != null) {
+                return String.valueOf(body.get("qualification"));
+            }
+        } catch (Exception e) {
+            // Fallback
+        }
+        return "MBBS";
     }
 }

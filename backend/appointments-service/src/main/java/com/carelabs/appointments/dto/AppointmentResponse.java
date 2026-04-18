@@ -27,5 +27,8 @@ public class AppointmentResponse {
     private String reason;
     private BigDecimal consultationFee;
     private String doctorFullName;
+    private String doctorSpecialty;
+    private String doctorQualification;
+    private java.time.LocalDate patientDob;
     private String meetingLink;
 }

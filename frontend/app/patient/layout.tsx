@@ -17,6 +17,7 @@ const routeTitles: Record<string, string> = {
   "/patient/allergies": "Allergies",
   "/patient/reports": "Reports",
   "/patient/ai-assessment": "Health Intelligence Center",
+  "/patient/support": "Support & Refund Requests",
 };
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {

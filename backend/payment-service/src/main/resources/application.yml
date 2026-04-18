@@ -5,9 +5,9 @@ spring:
   application:
     name: payment-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/carelabs_payments
-    username: postgres
-    password: 12345 # Assuming this is your local Docker password
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/carelabs_payments}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:12345}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -15,7 +15,7 @@ spring:
     show-sql: true
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -32,7 +32,7 @@ pricing:
 
 integration:
   appointments-service:
-    base-url: ${APPOINTMENTS_SERVICE_BASE_URL:http://localhost:8084}
+    base-url: ${APPOINTMENTS_SERVICE_URL:http://localhost:8084}
 
 app:
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}

@@ -15,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PaymentStatusConsumer {
 
+    private final AppointmentService appointmentService;
     private final AppointmentRepository appointmentRepository;
+
 
     @Transactional
     @KafkaListener(topics = "payment-events", groupId = "appointment-service-group-v2")
@@ -32,8 +34,7 @@ public class PaymentStatusConsumer {
         }
 
         if ("SUCCESS".equalsIgnoreCase(event.getStatus())) {
-            appointment.setStatus(AppointmentStatus.CONFIRMED);
-            appointmentRepository.save(appointment);
+            appointmentService.updateAppointmentStatus(event.getAppointmentId(), AppointmentStatus.CONFIRMED);
             log.info("Appointment {} confirmed via successful payment.", event.getAppointmentId());
         } else {
             log.info("Payment failed for appointment {}. Current status remains {}.", 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, FileText, AlertTriangle, BookOpen, Stethoscope, Video, Search } from "lucide-react";
+import { User, FileText, AlertTriangle, BookOpen, Stethoscope, Video, Search, ShieldAlert } from "lucide-react";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/patient/dashboard", icon: <Stethoscope className="w-5 h-5" /> },
@@ -12,6 +12,7 @@ const sidebarItems = [
   { label: "Allergies", href: "/patient/allergies", icon: <AlertTriangle className="w-5 h-5" /> },
   { label: "Find Doctors", href: "/doctors", icon: <Search className="w-5 h-5" /> },
   { label: "Medical Reports", href: "/patient/reports", icon: <FileText className="w-5 h-5" /> },
+  { label: "Support & Refunds", href: "/patient/support", icon: <ShieldAlert className="w-5 h-5" /> },
 ];
 
 export default function PatientSidebar() {

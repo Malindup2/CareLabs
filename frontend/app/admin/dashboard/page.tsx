@@ -22,7 +22,7 @@ import {
   PieChart, Pie, Cell
 } from 'recharts';
 
-type Tab = "overview" | "verification" | "appointments" | "users" | "broadcast" | "finance";
+type Tab = "overview" | "verification" | "appointments" | "users" | "broadcast" | "finance" | "tickets";
 
 interface Doctor {
   id: string;
@@ -66,6 +66,20 @@ interface Payment {
   createdAt: string;
 }
 
+interface SupportTicket {
+  id: string;
+  patientId: string;
+  category: "TECHNICAL_PROBLEM" | "REFUND" | "OTHER";
+  description: string;
+  appointmentId?: string;
+  accountNumber?: string;
+  bankName?: string;
+  branchName?: string;
+  status: "OPEN" | "RESOLVED" | "REJECTED";
+  createdAt: string;
+  resolvedAt?: string;
+}
+
 export default function AdminCommandCenter() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -78,6 +92,7 @@ export default function AdminCommandCenter() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
 
   // Verification State
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>("");
@@ -235,16 +250,18 @@ export default function AdminCommandCenter() {
   const loadAllData = async (jwt: string) => {
     setLoading(true);
     try {
-      const [docs, pats, apps, pmts] = await Promise.all([
+      const [docs, pats, apps, pmts, tks] = await Promise.all([
         apiGetAuth<Doctor[]>("/doctors/admin/all", jwt),
         apiGetAuth<Patient[]>("/patients", jwt),
         apiGetAuth<Appointment[]>("/appointments", jwt),
         apiGetAuth<Payment[]>("/payments/admin/transactions", jwt),
+        apiGetAuth<SupportTicket[]>("/appointments/support/tickets/all", jwt).catch(() => []),
       ]);
       setDoctors(docs);
       setPatients(pats);
       setAppointments(apps);
       setPayments(pmts);
+      setTickets(tks);
       
       const firstPending = docs.find(d => d.verificationStatus === "PENDING");
       setSelectedDoctorId(firstPending?.id || docs[0]?.id || "");
@@ -313,6 +330,28 @@ export default function AdminCommandCenter() {
     }
   };
 
+  const handleResolveTicket = async (ticketId: string) => {
+    if (!token) return;
+    try {
+      await apiPutAuth(`/appointments/support/tickets/${ticketId}/resolve`, {}, token);
+      toast.success("Ticket marked as resolved.");
+      loadAllData(token);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to resolve ticket.");
+    }
+  };
+
+  const handleRejectTicket = async (ticketId: string) => {
+    if (!token) return;
+    try {
+      await apiPutAuth(`/appointments/support/tickets/${ticketId}/reject`, {}, token);
+      toast.success("Ticket marked as rejected.");
+      loadAllData(token);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reject ticket.");
+    }
+  };
+
   const handleDeleteUser = async () => {
     if (!token || !userToDelete) return;
     setIsDeleting(true);
@@ -368,6 +407,7 @@ export default function AdminCommandCenter() {
           <NavItem active={activeTab === "users"} onClick={() => setActiveTab("users")} icon={Users} label="User Directory" />
           <NavItem active={activeTab === "finance"} onClick={() => setActiveTab("finance")} icon={CreditCard} label="Finance Hub" />
           <NavItem active={activeTab === "broadcast"} onClick={() => setActiveTab("broadcast")} icon={Megaphone} label="Broadcast" />
+          <NavItem active={activeTab === "tickets"} onClick={() => setActiveTab("tickets")} icon={ShieldAlert} label="Support Tickets" badge={tickets.filter(t => t.status === "OPEN").length} />
         </nav>
       </aside>
 
@@ -855,6 +895,91 @@ export default function AdminCommandCenter() {
                  </div>
                </div>
             )}
+
+            {activeTab === "tickets" && (
+              <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm">
+                 <div className="p-10 border-b border-slate-100 bg-slate-50/50">
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">Support Ticket Registry</h3>
+                   <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1">Platform Issue Resolution & Refund Oversight</p>
+                 </div>
+                 <div className="overflow-x-auto">
+                   <table className="w-full border-collapse">
+                     <thead>
+                       <tr className="bg-slate-50/50 border-b border-slate-100 text-left">
+                         <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Request Details</th>
+                         <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Classification</th>
+                         <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Refund/Bank Payload</th>
+                         <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                         <th className="px-8 py-6 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Action</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-50">
+                       {tickets.slice().reverse().map(t => (
+                         <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                           <td className="px-8 py-8 max-w-md">
+                              <p className="text-sm font-black text-slate-900 tracking-tight mb-2">PTR_{t.patientId.slice(0, 8)}</p>
+                              <p className="text-xs text-slate-500 font-medium leading-relaxed">{t.description || "N/A"}</p>
+                              <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-widest">{new Date(t.createdAt).toLocaleString()}</p>
+                           </td>
+                           <td className="px-6 py-8">
+                              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                                t.category === 'REFUND' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {t.category.replace('_', ' ')}
+                              </span>
+                           </td>
+                           <td className="px-6 py-8">
+                              {t.category === 'REFUND' ? (
+                                (() => {
+                                  const app = appointments.find(a => a.id === t.appointmentId);
+                                  return (
+                                    <div className="space-y-1">
+                                       <p className="text-[10px] font-black text-slate-900 uppercase">Bank: {t.bankName}</p>
+                                       <p className="text-[10px] font-bold text-slate-500">ACC: {t.accountNumber}</p>
+                                       <p className="text-[10px] font-bold text-slate-400 uppercase">Branch: {t.branchName}</p>
+                                       {app && (
+                                         <div className="mt-2 pt-2 border-t border-slate-100">
+                                           <p className="text-[9px] font-black text-indigo-600 uppercase">Dr. {app.doctorFullName || "Consultant"}</p>
+                                           <p className="text-[9px] font-bold text-slate-400">{new Date(app.appointmentTime).toLocaleString()}</p>
+                                         </div>
+                                       )}
+                                       <p className="text-[9px] font-black text-blue-600 mt-1">APP_{t.appointmentId?.slice(0, 8)}</p>
+                                    </div>
+                                  );
+                                })()
+                              ) : <span className="text-slate-300 text-[10px] font-black uppercase tracking-widest">N/A</span>}
+                           </td>
+                           <td className="px-6 py-8">
+                              <StatusPill status={t.status} />
+                           </td>
+                           <td className="px-8 py-8 text-right">
+                              {t.status === 'OPEN' && (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleRejectTicket(t.id)}
+                                    className="px-6 py-3 rounded-2xl bg-white border border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-200 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
+                                  >
+                                    Reject
+                                  </button>
+                                  <button
+                                    onClick={() => handleResolveTicket(t.id)}
+                                    className="px-6 py-3 rounded-2xl bg-slate-900 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-slate-200"
+                                  >
+                                    Resolve
+                                  </button>
+                                </div>
+                              )}
+                           </td>
+                         </tr>
+                       ))}
+                       {tickets.length === 0 && (
+                         <tr><td colSpan={5} className="py-24 text-center text-slate-300 italic text-[11px] font-black uppercase tracking-widest">No active support tickets found</td></tr>
+                       )}
+                     </tbody>
+                   </table>
+                 </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -921,8 +1046,10 @@ function StatusPill({ status }: { status: string }) {
     CANCELLED: "bg-slate-100 text-slate-400 border-slate-200",
     SUCCESS: "bg-emerald-100 text-emerald-700 border-emerald-200",
     FAILED: "bg-rose-100 text-rose-700 border-rose-200",
+    OPEN: "bg-blue-100 text-blue-700 border-blue-200",
+    RESOLVED: "bg-emerald-100 text-emerald-700 border-emerald-200",
   };
-  return (<span className={`px-2.5 py-1 rounded-full border text-[9px] font-black tracking-[0.15em] uppercase shadow-sm ${styles[status] || 'bg-slate-50 border-slate-100'}`}>{status}</span>);
+  return (<span className={`px-2.5 py-1 rounded-full border text-[9px] font-black tracking-[0.15em] uppercase shadow-sm ${styles[status] || 'bg-slate-50 border-slate-100 text-slate-600'}`}>{status}</span>);
 }
 
 function UserDirectory({ title, items, type, onViewDetail, onDelete }: { title: string, items: any[], type: 'doctor' | 'patient', onViewDetail: (user: any) => void, onDelete: (user: any) => void }) {

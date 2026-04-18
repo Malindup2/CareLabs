@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: <your-dockerhub-username>/carelabs-auth-service:latest
+        image: carelabs/carelabs-auth-service:latest
         ports:
         - containerPort: 8081
         envFrom:
@@ -22,6 +22,9 @@ spec:
             name: shared-config
         - secretRef:
             name: shared-secret
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres-service:5432/carelabs_auth"
 ---
 apiVersion: v1
 kind: Service

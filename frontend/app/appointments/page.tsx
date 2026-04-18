@@ -25,6 +25,7 @@ import {
   Trash2,
   Video,
   XCircle,
+  Download,
 } from "lucide-react";
 import {
   apiDeleteAuth,
@@ -89,6 +90,10 @@ interface Appointment {
   meetingLink?: string | null;
   reason?: string | null;
   consultationFee: number;
+  patientFullName?: string | null;
+  patientDob?: string | null;
+  doctorSpecialty?: string | null;
+  doctorQualification?: string | null;
 }
 
 interface ChatMessage {
@@ -243,7 +248,15 @@ function submitPayHereCheckout(payload: PayHereCheckoutResponse) {
   });
 
   document.body.appendChild(form);
+  console.log("[PAYHERE] Submitting redirection form to:", form.action);
   form.submit();
+  
+  // Clean up form after a short delay (navigation should have started)
+  setTimeout(() => {
+    if (document.body.contains(form)) {
+      document.body.removeChild(form);
+    }
+  }, 1000);
 }
 
 export default function AppointmentsHubPage() {
@@ -258,6 +271,7 @@ export default function AppointmentsHubPage() {
   const [showCancelAppointmentConfirm, setShowCancelAppointmentConfirm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   const [patientProfile, setPatientProfile] = useState<PatientProfile | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
@@ -327,6 +341,138 @@ export default function AppointmentsHubPage() {
       })
       .sort((a, b) => new Date(a.appointmentTime).getTime() - new Date(b.appointmentTime).getTime());
   }, [appointments, searchTerm, statusFilter]);
+
+  const handleDownloadSummaryPDF = async (appointmentId: string) => {
+    if (!token) return;
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return;
+
+    try {
+      toast.loading("Preparing clinical document...");
+      const [note, rx] = await Promise.all([
+        apiGetAuth<ConsultationNote>(`/appointments/${appointmentId}/notes`, token).catch(() => null),
+        apiGetAuth<Prescription>(`/appointments/${appointmentId}/prescriptions`, token).catch(() => null)
+      ]);
+      toast.dismiss();
+
+      if (!note && !rx) {
+        toast.error("No clinical notes or prescriptions found for this session.");
+        return;
+      }
+
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFillColor(15, 23, 42); // slate-900
+      doc.rect(0, 0, 210, 40, "F");
+      
+      doc.setFontSize(22);
+      doc.setTextColor(255, 255, 255);
+      doc.text("CARELABS MEDICAL SUMMARY", 14, 25);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.text("Official Clinical Consultation Record • Digitally Verified", 14, 32);
+
+      // Patient & Session Info
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("PATIENT INFORMATION", 14, 55);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`Patient: ${appointment.patientFullName || "Valued CareLabs Patient"}`, 14, 62);
+      doc.text(`Date of Birth: ${appointment.patientDob || "N/A"}`, 14, 67);
+      
+      doc.setFont("helvetica", "bold");
+      doc.text("CONSULTATION DETAILS", 110, 55);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Doctor: Dr. ${appointment.doctorFullName || "Assigned Physician"}`, 110, 62);
+      doc.text(`Specialty: ${appointment.doctorSpecialty || "General Medicine"}`, 110, 67);
+      doc.text(`Qualification: ${appointment.doctorQualification || "MBBS"}`, 110, 72);
+      doc.text(`Reference: ${appointment.id.slice(0, 8).toUpperCase()}`, 110, 77);
+      doc.text(`Session Date: ${new Date(appointment.appointmentTime).toLocaleDateString()}`, 110, 82);
+
+      let currentY = 95;
+
+      // Clinical Note
+      if (note) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text("CLINICAL OBSERVATIONS", 14, currentY);
+        currentY += 8;
+        
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.text("Chief Complaint:", 14, currentY);
+        doc.setFont("helvetica", "bold");
+        doc.text(note.chiefComplaint || "-", 45, currentY);
+        currentY += 7;
+        
+        doc.setFont("helvetica", "normal");
+        doc.text("Final Diagnosis:", 14, currentY);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(37, 99, 235); // blue-600
+        doc.text(note.diagnosis || "-", 45, currentY);
+        doc.setTextColor(0, 0, 0);
+        currentY += 10;
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Clinical Notes:", 14, currentY);
+        currentY += 6;
+        doc.setFont("helvetica", "normal");
+        const splitNotes = doc.splitTextToSize(note.clinicalNotes || "No detailed notes provided.", 180);
+        doc.text(splitNotes, 14, currentY);
+        currentY += (splitNotes.length * 5) + 15;
+      }
+
+      // Prescription
+      if (rx && rx.items && rx.items.length > 0) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text("DIGITAL PRESCRIPTION", 14, currentY);
+        currentY += 8;
+
+        autoTable(doc, {
+          startY: currentY,
+          head: [["Medicine", "Dosage", "Frequency", "Duration", "Route"]],
+          body: rx.items.map(item => [
+            item.medicineName,
+            item.dosage,
+            item.frequency,
+            item.duration,
+            item.route
+          ]),
+          headStyles: { fillColor: [5, 150, 105], textColor: [255, 255, 255] }, // emerald-600
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 9 }
+        });
+        
+        currentY = (doc as any).lastAutoTable.finalY + 15;
+        
+        if (rx.notes) {
+          doc.setFont("helvetica", "bold");
+          doc.text("Prescription Notes:", 14, currentY);
+          currentY += 6;
+          doc.setFont("helvetica", "normal");
+          const splitRxNotes = doc.splitTextToSize(rx.notes, 180);
+          doc.text(splitRxNotes, 14, currentY);
+          currentY += (splitRxNotes.length * 5) + 15;
+        }
+      }
+
+      // Footer
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text("This is an electronically generated document from CareLabs Digital Health Platform. No signature required.", 105, 285, { align: "center" });
+
+      doc.save(`CareLabs_Summary_${appointment.id.slice(0, 8)}.pdf`);
+      toast.success("Clinical summary downloaded.");
+    } catch (err) {
+      console.error("Failed to generate PDF", err);
+      toast.error("Unable to generate clinical document.");
+    }
+  };
 
   const handleDownloadPDF = () => {
     if (visibleAppointments.length === 0) {
@@ -702,10 +848,14 @@ export default function AppointmentsHubPage() {
       );
 
       toast.success("Appointment booked. Redirecting to PayHere checkout.");
-      await refreshAppointments();
+      
+      // Trigger redirection immediately to avoid interference from state updates
+      submitPayHereCheckout(checkoutPayload);
+
+      // Perform background updates
+      void refreshAppointments();
       setSelectedAppointmentId(created.id);
       setAppointmentForm((state) => ({ ...state, reason: "" }));
-      submitPayHereCheckout(checkoutPayload);
     } catch (err: unknown) {
       const error = err as { message?: string };
       toast.error(error.message || "Unable to book appointment");
@@ -899,6 +1049,8 @@ export default function AppointmentsHubPage() {
         token,
       );
       toast.success("Review submitted.");
+      setShowReviewModal(false);
+      await refreshAppointments();
     } catch (err: unknown) {
       const error = err as { message?: string };
       toast.error(error.message || "Unable to submit review");
@@ -1143,6 +1295,7 @@ export default function AppointmentsHubPage() {
                         <tr className="text-left text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 bg-slate-50/50 border-b border-slate-100">
                           <th className="px-8 py-5">Internal ID</th>
                           <th className="px-6 py-5">Clinical Time</th>
+                          <th className="px-6 py-5">Practitioner</th>
                           <th className="px-6 py-5">Modality</th>
                           <th className="px-6 py-5">Status</th>
                           <th className="px-6 py-5 text-right">Fee (LKR)</th>
@@ -1164,10 +1317,21 @@ export default function AppointmentsHubPage() {
                                 <span className="block text-[10px] font-bold text-slate-400 mt-1">{new Date(appointment.appointmentTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </td>
                             <td className="px-6 py-6">
-                              <span className="flex items-center gap-2">
-                                 {appointment.type === "TELEMEDICINE" ? <Video className="w-3.5 h-3.5 text-blue-500" /> : <Stethoscope className="w-3.5 h-3.5 text-slate-400" />}
-                                 <span className="uppercase tracking-tight">{appointment.type}</span>
-                              </span>
+                               <div className="flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 border border-slate-200 uppercase">
+                                   {getInitials(appointment.doctorName || appointment.doctorFullName || "DR")}
+                                 </div>
+                                 <div className="min-w-0">
+                                   <p className="font-black text-slate-900 leading-none truncate">Dr. {appointment.doctorName || appointment.doctorFullName || "Consultant"}</p>
+                                   <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter truncate">{appointment.doctorSpecialty || "Specialist"}</p>
+                                 </div>
+                               </div>
+                            </td>
+                            <td className="px-6 py-6">
+                               <span className="flex items-center gap-2">
+                                  {appointment.type === "TELEMEDICINE" ? <Video className="w-3.5 h-3.5 text-blue-500" /> : <Stethoscope className="w-3.5 h-3.5 text-slate-400" />}
+                                  <span className="uppercase tracking-tight">{appointment.type}</span>
+                               </span>
                             </td>
                             <td className="px-6 py-6">
                               <StatusPill status={appointment.status} />
@@ -1205,6 +1369,34 @@ export default function AppointmentsHubPage() {
                                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse" />
                                  )}
                                </button>
+                               {appointment.status === "COMPLETED" && isPatient && (
+                                 <>
+                                   <button
+                                     type="button"
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       void handleDownloadSummaryPDF(appointment.id);
+                                     }}
+                                     className="relative ml-2 p-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                                     title="Download Clinical Summary"
+                                   >
+                                     <Download className="w-4 h-4" />
+                                   </button>
+                                   <button
+                                     type="button"
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       setSelectedAppointmentId(appointment.id);
+                                       setReviewForm(prev => ({ ...prev, appointmentId: appointment.id, doctorId: appointment.doctorId }));
+                                       setShowReviewModal(true);
+                                     }}
+                                     className="relative ml-2 p-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-all active:scale-95"
+                                     title="Leave Feedback"
+                                   >
+                                     <Star className="w-4 h-4" />
+                                   </button>
+                                 </>
+                               )}
                             </td>
                           </tr>
                         ))}
@@ -1441,6 +1633,58 @@ export default function AppointmentsHubPage() {
             <p className="text-[9px] font-bold text-slate-400 uppercase text-center mt-4 tracking-widest">Shift + Enter for new line. Messages are logged for clinical audit.</p>
           </div>
         </div>
+      </Modal>
+
+      {/* Review Modal */}
+      <Modal
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        title="Patient Feedback & Rating"
+      >
+        <form onSubmit={handleSubmitReview} className="space-y-8 p-2">
+          <div className="p-8 rounded-[2.5rem] bg-slate-50 border border-slate-100 flex flex-col gap-8">
+            <div className="text-center space-y-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.3em] text-blue-600">Rate your clinical experience</p>
+              <div className="flex items-center justify-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setReviewForm(prev => ({ ...prev, rating: star }))}
+                    className={`p-2 transition-all transform hover:scale-110 active:scale-90 ${reviewForm.rating >= star ? "text-amber-500" : "text-slate-300"}`}
+                  >
+                    <Star className={`w-10 h-10 ${reviewForm.rating >= star ? "fill-amber-500" : "fill-none"}`} />
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm font-bold text-slate-500 italic">
+                {reviewForm.rating === 5 && "Exceptional Care"}
+                {reviewForm.rating === 4 && "Great Experience"}
+                {reviewForm.rating === 3 && "Satisfactory"}
+                {reviewForm.rating === 2 && "Could be better"}
+                {reviewForm.rating === 1 && "Poor experience"}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-4">Subjective Feedback</label>
+              <textarea
+                value={reviewForm.comment}
+                onChange={(e) => setReviewForm(prev => ({ ...prev, comment: e.target.value }))}
+                className="w-full rounded-[2rem] border border-slate-200 bg-white px-6 py-5 text-sm font-bold text-slate-900 focus:ring-4 ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-slate-300 min-h-[150px]"
+                placeholder="Describe your consultation experience, the doctor's communication, and overall quality of care..."
+                required
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full rounded-[2rem] bg-slate-900 hover:bg-blue-600 text-white font-black uppercase tracking-[0.2em] py-5 text-xs shadow-2xl shadow-slate-200 transition-all active:scale-[0.98]"
+          >
+            Submit Professional Feedback
+          </button>
+        </form>
       </Modal>
     </div>
   );

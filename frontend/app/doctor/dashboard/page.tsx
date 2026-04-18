@@ -40,6 +40,7 @@ import {
   FileDigit,
   MessageSquare,
   Send,
+  ExternalLink,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import Modal from "@/components/Modal";
@@ -267,6 +268,12 @@ export default function DoctorDashboardPage() {
   const [activeClinicalAppointmentId, setActiveClinicalAppointmentId] = useState<string | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [isRxModalOpen, setIsRxModalOpen] = useState(false);
+  const [activeModalTab, setActiveModalTab] = useState<"CURRENT" | "HISTORY" | "DOCUMENTS">("CURRENT");
+  const [patientNotesHistory, setPatientNotesHistory] = useState<ConsultationNote[]>([]);
+  const [patientRxHistory, setPatientRxHistory] = useState<Prescription[]>([]);
+  const [patientAllergies, setPatientAllergies] = useState<PatientAllergyResponse[]>([]);
+  const [patientReports, setPatientReports] = useState<MedicalReportResponse[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   const appointmentStats = useMemo(() => {
     const total = appointments.length;
@@ -289,16 +296,18 @@ export default function DoctorDashboardPage() {
   }, [appointments, appointmentSearch, appointmentFilterStatus]);
   const completedAppointments = useMemo(() => appointments.filter((a) => a.status === "COMPLETED"), [appointments]);
 
-  const openNoteModal = (appointmentId: string) => {
-    setActiveClinicalAppointmentId(appointmentId);
-    setSelectedAppointmentId(appointmentId);
-    setIsNoteModalOpen(true);
-  };
-
   const openRxModal = (appointmentId: string) => {
     setActiveClinicalAppointmentId(appointmentId);
     setSelectedAppointmentId(appointmentId);
     setIsRxModalOpen(true);
+    setActiveModalTab("CURRENT");
+  };
+
+  const openNoteModal = (appointmentId: string) => {
+    setActiveClinicalAppointmentId(appointmentId);
+    setSelectedAppointmentId(appointmentId);
+    setIsNoteModalOpen(true);
+    setActiveModalTab("CURRENT");
   };
 
   const selectedAppointment = useMemo(
@@ -308,6 +317,30 @@ export default function DoctorDashboardPage() {
   const isJitsiLink = useMemo(() => isJitsiMeetingUrl(meetingLink), [meetingLink]);
   const jitsiRoomName = useMemo(() => getJitsiRoomName(meetingLink), [meetingLink]);
   const jitsiEmbedUrl = useMemo(() => toJitsiEmbedUrl(meetingLink), [meetingLink]);
+
+  useEffect(() => {
+    const fetchPatientHistory = async () => {
+      if ((isNoteModalOpen || isRxModalOpen) && selectedAppointment?.patientId && token) {
+        setIsHistoryLoading(true);
+        try {
+          const [notes, rxs, medHistory] = await Promise.all([
+            apiGetAuth<ConsultationNote[]>(`/appointments/patient/${selectedAppointment.patientId}/notes`, token),
+            apiGetAuth<Prescription[]>(`/appointments/patient/${selectedAppointment.patientId}/prescriptions`, token),
+            apiGetAuth<MedicalHistoryResponse>(`/patients/internal/${selectedAppointment.patientId}/medical-history`, token)
+          ]);
+          setPatientNotesHistory(notes || []);
+          setPatientRxHistory(rxs || []);
+          setPatientAllergies(medHistory?.allergies || []);
+          setPatientReports(medHistory?.reports || []);
+        } catch (err) {
+          console.error("Failed to fetch patient history", err);
+        } finally {
+          setIsHistoryLoading(false);
+        }
+      }
+    };
+    void fetchPatientHistory();
+  }, [isNoteModalOpen, isRxModalOpen, selectedAppointment?.patientId, token]);
 
   const earnings = useMemo(() => {
     const gross = completedAppointments.reduce((sum, a) => sum + (a.consultationFee || 0), 0);
@@ -704,24 +737,39 @@ export default function DoctorDashboardPage() {
         try {
           const existing = await apiGetAuth<Prescription>(`/appointments/${selectedAppointmentId}/prescriptions`, token);
           if (existing) {
-            setPrescriptionPayload({
+            const firstItem = existing.items?.[0];
+            setPrescription({
+              medicineName: firstItem?.medicineName || "",
+              dosage: firstItem?.dosage || "",
+              frequency: firstItem?.frequency || "",
+              duration: firstItem?.duration || "",
+              route: firstItem?.route || "ORAL",
+              instructions: firstItem?.instructions || "",
               validUntil: existing.validUntil || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
               notes: existing.notes || "",
-              items: existing.items || [],
             });
           } else {
-            setPrescriptionPayload({
+            setPrescription({
+              medicineName: "",
+              dosage: "",
+              frequency: "",
+              duration: "",
+              route: "ORAL",
+              instructions: "",
               validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
               notes: "",
-              items: [],
             });
           }
         } catch (err) {
-          // Record doesn't exist yet, reset form
-          setPrescriptionPayload({
+          setPrescription({
+            medicineName: "",
+            dosage: "",
+            frequency: "",
+            duration: "",
+            route: "ORAL",
+            instructions: "",
             validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
             notes: "",
-            items: [],
           });
         }
       };
@@ -2231,103 +2279,305 @@ export default function DoctorDashboardPage() {
             </div>
 
             <Modal isOpen={isNoteModalOpen} onClose={() => setIsNoteModalOpen(false)} title="Clinical Observation Session">
-               <form onSubmit={handleSaveConsultationNote} className="space-y-6">
-                  <div className="p-4 rounded-3xl bg-blue-50 border border-blue-100 flex items-center justify-between">
-                     <div>
-                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Active Patient</p>
-                        <p className="text-sm font-black text-slate-900 mt-0.5">{selectedAppointment?.patientFullName || "Loading..."}</p>
-                     </div>
-                     <div className="p-2.5 rounded-2xl bg-white text-blue-600 shadow-sm">
-                        <User className="w-5 h-5" />
-                     </div>
-                  </div>
-                  <Input label="Main Complaint" value={consultationNote.chiefComplaint} onChange={(value) => setConsultationNote((s) => ({ ...s, chiefComplaint: value }))} required placeholder="Why is the patient seeking care?" />
-                  <div className="space-y-2">
-                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-1">Detailed Findings</label>
-                     <textarea 
-                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none min-h-[160px]" 
-                       rows={4} 
-                       value={consultationNote.clinicalNotes} 
-                       onChange={(e) => setConsultationNote((s) => ({ ...s, clinicalNotes: e.target.value }))} 
-                       required 
-                       placeholder="Enter clinical observations, symptoms, and examination results..." 
-                     />
-                  </div>
-                  <Input label="Final Diagnosis" value={consultationNote.diagnosis} onChange={(value) => setConsultationNote((s) => ({ ...s, diagnosis: value }))} required placeholder="e.g. Simple Viral Fever" />
-                  <div className="pt-4">
-                     <button className="w-full py-5 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-2">
-                        <FileDigit className="w-4 h-4" /> Save to EMR Ledger
-                     </button>
-                  </div>
-               </form>
+               <div className="mb-6 flex p-1 bg-slate-100 rounded-2xl">
+                 <button 
+                   onClick={() => setActiveModalTab("CURRENT")}
+                   className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeModalTab === "CURRENT" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                 >
+                   Current Session
+                 </button>
+                 <button 
+                   onClick={() => setActiveModalTab("HISTORY")}
+                   className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeModalTab === "HISTORY" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                 >
+                   History
+                 </button>
+                 <button 
+                   onClick={() => setActiveModalTab("DOCUMENTS")}
+                   className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeModalTab === "DOCUMENTS" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                 >
+                   Reports
+                 </button>
+               </div>
+
+               {activeModalTab === "CURRENT" ? (
+                 <form onSubmit={handleSaveConsultationNote} className="space-y-6">
+                    {patientAllergies.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                         <div className="p-2 rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-200">
+                            <AlertCircle className="w-5 h-5" />
+                         </div>
+                         <div className="flex-1">
+                            <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Known Allergies</p>
+                            <p className="text-sm font-bold text-rose-900 mt-0.5 leading-tight">
+                               {patientAllergies.map(a => a.allergen).join(", ")}
+                            </p>
+                            <p className="text-[9px] font-bold text-rose-400 uppercase mt-1">Review carefully before prescribing medications</p>
+                         </div>
+                      </div>
+                    )}
+                    <div className="p-4 rounded-3xl bg-blue-50 border border-blue-100 flex items-center justify-between">
+                       <div>
+                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Active Patient</p>
+                          <p className="text-sm font-black text-slate-900 mt-0.5">{selectedAppointment?.patientFullName || "Loading..."}</p>
+                       </div>
+                       <div className="p-2.5 rounded-2xl bg-white text-blue-600 shadow-sm">
+                          <User className="w-5 h-5" />
+                       </div>
+                    </div>
+                    <Input label="Main Complaint" value={consultationNote.chiefComplaint} onChange={(value) => setConsultationNote((s) => ({ ...s, chiefComplaint: value }))} required placeholder="Why is the patient seeking care?" />
+                    <div className="space-y-2">
+                       <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-1">Detailed Findings</label>
+                       <textarea 
+                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none min-h-[160px]" 
+                         rows={4} 
+                         value={consultationNote.clinicalNotes} 
+                         onChange={(e) => setConsultationNote((s) => ({ ...s, clinicalNotes: e.target.value }))} 
+                         required 
+                         placeholder="Enter clinical observations, symptoms, and examination results..." 
+                       />
+                    </div>
+                    <Input label="Final Diagnosis" value={consultationNote.diagnosis} onChange={(value) => setConsultationNote((s) => ({ ...s, diagnosis: value }))} required placeholder="e.g. Simple Viral Fever" />
+                    <div className="pt-4">
+                       <button className="w-full py-5 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-2">
+                          <FileDigit className="w-4 h-4" /> Save to EMR Ledger
+                       </button>
+                    </div>
+                 </form>
+               ) : activeModalTab === "HISTORY" ? (
+                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
+                    {isHistoryLoading ? (
+                      <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest animate-pulse">Synchronizing clinical history...</div>
+                    ) : patientNotesHistory.length > 0 ? (
+                      patientNotesHistory.map((note, idx) => (
+                        <div key={idx} className="p-5 rounded-3xl border border-slate-100 bg-slate-50 space-y-3">
+                           <div className="flex items-center justify-between">
+                              <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Encounter #{idx + 1}</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Verified Record</p>
+                           </div>
+                           <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Chief Complaint</p>
+                              <p className="text-sm font-bold text-slate-900">{note.chiefComplaint}</p>
+                           </div>
+                           <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Diagnosis</p>
+                              <p className="text-sm font-black text-blue-700">{note.diagnosis}</p>
+                           </div>
+                           <div className="pt-2 border-t border-slate-200/50">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Clinical Observations</p>
+                              <p className="text-xs font-medium text-slate-600 leading-relaxed italic">"{note.clinicalNotes}"</p>
+                           </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest italic">No prior clinical observations found.</div>
+                    )}
+                 </div>
+               ) : (
+                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
+                    {isHistoryLoading ? (
+                      <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest animate-pulse">Retrieving uploaded records...</div>
+                    ) : patientReports.length > 0 ? (
+                      patientReports.map((report, idx) => (
+                        <div key={idx} className="p-5 rounded-3xl border border-slate-100 bg-white flex items-center justify-between gap-4">
+                           <div className="flex items-center gap-4">
+                              <div className="p-3 rounded-2xl bg-blue-50 text-blue-600">
+                                 <FileText className="w-5 h-5" />
+                              </div>
+                              <div>
+                                 <p className="text-sm font-black text-slate-900 truncate max-w-[200px]">{report.fileName}</p>
+                                 <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">{report.type}</p>
+                              </div>
+                           </div>
+                           <a 
+                             href={report.fileUrl} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="p-3 rounded-xl bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                             title="View Report"
+                           >
+                              <ExternalLink className="w-4 h-4" />
+                           </a>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest italic">No medical reports uploaded.</div>
+                    )}
+                 </div>
+               )}
             </Modal>
 
             <Modal isOpen={isRxModalOpen} onClose={() => setIsRxModalOpen(false)} title="Digital Prescription Generator">
-               <form onSubmit={handleSavePrescription} className="space-y-6">
-                  <div className="p-6 rounded-3xl bg-emerald-50 border border-emerald-100 relative overflow-hidden">
-                     <div className="relative z-10">
-                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Issuing For</p>
-                        <p className="text-lg font-black text-slate-900 mt-1">{selectedAppointment?.patientFullName || "Loading..."}</p>
-                     </div>
-                     <Stethoscope className="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 text-emerald-200/50" />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-5">
-                    <Input label="Generic Name" value={prescription.medicineName} onChange={(val) => setPrescription(s => ({...s, medicineName: val}))} required />
-                    <Input label="Dosage (e.g. 500mg)" value={prescription.dosage} onChange={(val) => setPrescription(s => ({...s, dosage: val}))} required />
-                  </div>
+               <div className="mb-6 flex p-1 bg-slate-100 rounded-2xl">
+                 <button 
+                   onClick={() => setActiveModalTab("CURRENT")}
+                   className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeModalTab === "CURRENT" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                 >
+                   Current Rx
+                 </button>
+                 <button 
+                   onClick={() => setActiveModalTab("HISTORY")}
+                   className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeModalTab === "HISTORY" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                 >
+                   History
+                 </button>
+                 <button 
+                   onClick={() => setActiveModalTab("DOCUMENTS")}
+                   className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${activeModalTab === "DOCUMENTS" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                 >
+                   Reports
+                 </button>
+               </div>
 
-                  <div className="grid grid-cols-2 gap-5">
-                    <Input label="Frequency" value={prescription.frequency} onChange={(val) => setPrescription(s => ({...s, frequency: val}))} required placeholder="e.g. 3 times daily" />
-                    <Input label="Duration" value={prescription.duration} onChange={(val) => setPrescription(s => ({...s, duration: val}))} required placeholder="e.g. 5 days" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-5">
-                    <div className="space-y-2">
-                       <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-1">Route</label>
-                       <select 
-                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
-                         value={prescription.route}
-                         onChange={(e) => setPrescription(s => ({...s, route: e.target.value}))}
-                       >
-                          <option value="ORAL">Oral (PO)</option>
-                          <option value="INJECTION">Injection (IM/IV)</option>
-                          <option value="TOPICAL">Topical</option>
-                          <option value="INHALED">Inhaled</option>
-                           <option value="OTHER">Other</option>
-                       </select>
+               {activeModalTab === "CURRENT" ? (
+                 <form onSubmit={handleSavePrescription} className="space-y-6">
+                    {patientAllergies.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                         <div className="p-2 rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-200">
+                            <AlertCircle className="w-5 h-5" />
+                         </div>
+                         <div className="flex-1">
+                            <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Known Allergies</p>
+                            <p className="text-sm font-bold text-rose-900 mt-0.5 leading-tight">
+                               {patientAllergies.map(a => a.allergen).join(", ")}
+                            </p>
+                            <p className="text-[9px] font-bold text-rose-400 uppercase mt-1">Review carefully before prescribing medications</p>
+                         </div>
+                      </div>
+                    )}
+                    <div className="p-6 rounded-3xl bg-emerald-50 border border-emerald-100 relative overflow-hidden">
+                       <div className="relative z-10">
+                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Issuing For</p>
+                          <p className="text-lg font-black text-slate-900 mt-1">{selectedAppointment?.patientFullName || "Loading..."}</p>
+                       </div>
+                       <Stethoscope className="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 text-emerald-200/50" />
                     </div>
-                    <Input label="Valid Until" type="date" value={prescription.validUntil} onChange={(val) => setPrescription(s => ({...s, validUntil: val}))} required />
-                  </div>
-                  
-                  <div className="space-y-2">
-                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-1">Specific Intake Instructions</label>
-                     <textarea 
-                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none min-h-[80px]" 
-                       rows={2} 
-                       value={prescription.instructions} 
-                       onChange={(e) => setPrescription(s => ({...s, instructions: e.target.value}))} 
-                       placeholder="e.g. After meals, avoid dairy..." 
-                     />
-                  </div>
+                    
+                    <div className="grid grid-cols-2 gap-5">
+                      <Input label="Generic Name" value={prescription.medicineName} onChange={(val) => setPrescription(s => ({...s, medicineName: val}))} required />
+                      <Input label="Dosage (e.g. 500mg)" value={prescription.dosage} onChange={(val) => setPrescription(s => ({...s, dosage: val}))} required />
+                    </div>
 
-                  <div className="space-y-2">
-                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-1">Pharmacist Instructions</label>
-                     <textarea 
-                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none min-h-[100px]" 
-                       rows={3} 
-                       value={prescription.notes} 
-                       onChange={(e) => setPrescription(s => ({...s, notes: e.target.value}))} 
-                       placeholder="Enter additional instructions for intake..." 
-                     />
-                  </div>
+                    <div className="grid grid-cols-2 gap-5">
+                      <Input label="Frequency" value={prescription.frequency} onChange={(val) => setPrescription(s => ({...s, frequency: val}))} required placeholder="e.g. 3 times daily" />
+                      <Input label="Duration" value={prescription.duration} onChange={(val) => setPrescription(s => ({...s, duration: val}))} required placeholder="e.g. 5 days" />
+                    </div>
 
-                  <div className="pt-4">
-                     <button className="w-full py-5 rounded-2xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2">
-                        <Pill className="w-4 h-4" /> Finalize Prescription
-                     </button>
-                  </div>
-               </form>
+                    <div className="grid grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                         <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-1">Route</label>
+                         <select 
+                           className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                           value={prescription.route}
+                           onChange={(e) => setPrescription(s => ({...s, route: e.target.value}))}
+                         >
+                            <option value="ORAL">Oral (PO)</option>
+                            <option value="INJECTION">Injection (IM/IV)</option>
+                            <option value="TOPICAL">Topical</option>
+                            <option value="INHALED">Inhaled</option>
+                             <option value="OTHER">Other</option>
+                         </select>
+                      </div>
+                      <Input label="Valid Until" type="date" value={prescription.validUntil} onChange={(val) => setPrescription(s => ({...s, validUntil: val}))} required />
+                    </div>
+                    
+                    <div className="space-y-2">
+                       <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-1">Specific Intake Instructions</label>
+                       <textarea 
+                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none min-h-[80px]" 
+                         rows={2} 
+                         value={prescription.instructions} 
+                         onChange={(e) => setPrescription(s => ({...s, instructions: e.target.value}))} 
+                         placeholder="e.g. After meals, avoid dairy..." 
+                       />
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 block px-1">Pharmacist Instructions</label>
+                       <textarea 
+                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none min-h-[100px]" 
+                         rows={3} 
+                         value={prescription.notes} 
+                         onChange={(e) => setPrescription(s => ({...s, notes: e.target.value}))} 
+                         placeholder="Enter additional instructions for intake..." 
+                       />
+                    </div>
+
+                    <div className="pt-4">
+                       <button className="w-full py-5 rounded-2xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2">
+                          <Pill className="w-4 h-4" /> Finalize Prescription
+                       </button>
+                    </div>
+                 </form>
+               ) : activeModalTab === "HISTORY" ? (
+                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
+                    {isHistoryLoading ? (
+                      <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest animate-pulse">Retrieving medication history...</div>
+                    ) : patientRxHistory.length > 0 ? (
+                      patientRxHistory.map((rx, idx) => (
+                        <div key={idx} className="p-5 rounded-3xl border border-emerald-100 bg-emerald-50/30 space-y-3">
+                           <div className="flex items-center justify-between">
+                              <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Prescription #{idx + 1}</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Valid Until: {rx.validUntil}</p>
+                           </div>
+                           <div className="space-y-2">
+                              {rx.items?.map((item, i) => (
+                                <div key={i} className="bg-white p-3 rounded-2xl border border-emerald-50">
+                                   <p className="text-sm font-black text-slate-900">{item.medicineName}</p>
+                                   <div className="flex gap-3 mt-1">
+                                      <span className="text-[10px] font-bold text-emerald-600 uppercase">{item.dosage}</span>
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase">•</span>
+                                      <span className="text-[10px] font-bold text-slate-500 uppercase">{item.frequency}</span>
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase">•</span>
+                                      <span className="text-[10px] font-bold text-slate-500 uppercase">{item.duration}</span>
+                                   </div>
+                                </div>
+                              ))}
+                           </div>
+                           {rx.notes && (
+                             <div className="pt-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Doctor's Notes</p>
+                                <p className="text-xs font-medium text-slate-600 leading-relaxed italic">"{rx.notes}"</p>
+                             </div>
+                           )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest italic">No prior prescriptions found.</div>
+                    )}
+                 </div>
+               ) : (
+                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
+                    {isHistoryLoading ? (
+                      <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest animate-pulse">Retrieving medical reports...</div>
+                    ) : patientReports.length > 0 ? (
+                      patientReports.map((report, idx) => (
+                        <div key={idx} className="p-5 rounded-3xl border border-emerald-100 bg-white flex items-center justify-between gap-4">
+                           <div className="flex items-center gap-4">
+                              <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
+                                 <FileText className="w-5 h-5" />
+                              </div>
+                              <div>
+                                 <p className="text-sm font-black text-slate-900 truncate max-w-[200px]">{report.fileName}</p>
+                                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-0.5">{report.type}</p>
+                              </div>
+                           </div>
+                           <a 
+                             href={report.fileUrl} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="p-3 rounded-xl bg-slate-100 text-slate-600 hover:bg-emerald-600 hover:text-white transition-all active:scale-95"
+                             title="View Report"
+                           >
+                              <ExternalLink className="w-4 h-4" />
+                           </a>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest italic">No reports found for this patient.</div>
+                    )}
+                 </div>
+               )}
             </Modal>
 
             <Modal

@@ -1,6 +1,7 @@
 package com.carelabs.appointments.service;
 
 import com.carelabs.appointments.dto.AppointmentBookedEvent;
+import com.carelabs.appointments.dto.ReviewSubmittedEvent;
 import com.carelabs.appointments.dto.DoctorAvailabilityView;
 import com.carelabs.appointments.dto.DoctorSlotAllocationItem;
 import com.carelabs.appointments.dto.AppointmentRequest;
@@ -38,7 +39,7 @@ public class AppointmentService {
     private final BookingValidationService bookingValidationService;
     private final ConsultationPricingService consultationPricingService;
     private final DoctorScheduleLookupService doctorScheduleLookupService;
-    private final org.springframework.kafka.core.KafkaTemplate<String, AppointmentBookedEvent> kafkaTemplate;
+    private final org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
                               ChatMessageRepository chatMessageRepository,
@@ -48,7 +49,7 @@ public class AppointmentService {
                               BookingValidationService bookingValidationService,
                               ConsultationPricingService consultationPricingService,
                               DoctorScheduleLookupService doctorScheduleLookupService,
-                              org.springframework.kafka.core.KafkaTemplate<String, AppointmentBookedEvent> kafkaTemplate) {
+                              org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate) {
         this.appointmentRepository = appointmentRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.consultationNoteRepository = consultationNoteRepository;
@@ -116,8 +117,11 @@ public class AppointmentService {
                 .id(a.getId())
                 .patientId(a.getPatientId())
                 .patientFullName(bookingValidationService.getPatientFullName(a.getPatientId()))
+                .patientDob(bookingValidationService.getPatientDob(a.getPatientId()))
                 .doctorId(a.getDoctorId())
                 .doctorFullName(bookingValidationService.getDoctorFullName(a.getDoctorId()))
+                .doctorSpecialty(bookingValidationService.getDoctorSpecialty(a.getDoctorId()))
+                .doctorQualification(bookingValidationService.getDoctorQualification(a.getDoctorId()))
                 .appointmentTime(a.getAppointmentTime())
                 .durationMinutes(a.getDurationMinutes())
                 .status(a.getStatus())
@@ -135,8 +139,52 @@ public class AppointmentService {
 
     public Appointment updateAppointmentStatus(UUID id, AppointmentStatus newStatus) {
         Appointment appointment = getAppointmentById(id);
+        AppointmentStatus currentStatus = appointment.getStatus();
+
+        // Enforce the flow: PENDING -> CONFIRMED -> ACCEPTED -> COMPLETED
+        validateStatusTransition(currentStatus, newStatus);
+
         appointment.setStatus(newStatus);
         return appointmentRepository.save(appointment);
+    }
+
+    private void validateStatusTransition(AppointmentStatus current, AppointmentStatus target) {
+        if (current == target) return;
+
+        switch (target) {
+            case CONFIRMED:
+                if (current != AppointmentStatus.PENDING) {
+                    throw new RuntimeException("Appointment can only be confirmed from PENDING status.");
+                }
+                break;
+            case ACCEPTED:
+                if (current != AppointmentStatus.CONFIRMED) {
+                    throw new RuntimeException("Appointment must be CONFIRMED before it can be ACCEPTED.");
+                }
+                break;
+            case COMPLETED:
+                if (current != AppointmentStatus.ACCEPTED) {
+                    throw new RuntimeException("Appointment must be ACCEPTED before it can be COMPLETED.");
+                }
+                break;
+            case REJECTED:
+                if (current != AppointmentStatus.CONFIRMED && current != AppointmentStatus.PENDING) {
+                    throw new RuntimeException("Only PENDING or CONFIRMED appointments can be REJECTED.");
+                }
+                break;
+            case CANCELLED:
+                if (current == AppointmentStatus.COMPLETED) {
+                    throw new RuntimeException("Cannot cancel a COMPLETED appointment.");
+                }
+                break;
+            case NO_SHOW:
+                if (current != AppointmentStatus.ACCEPTED) {
+                    throw new RuntimeException("Only ACCEPTED appointments can be marked as NO_SHOW.");
+                }
+                break;
+            default:
+                break;
+        }
     }
 
     public void deleteAppointment(UUID id) {
@@ -302,7 +350,20 @@ public class AppointmentService {
 
     public ConsultationNote saveNote(UUID appointmentId, ConsultationNote note) {
         getAppointmentById(appointmentId);
-        return consultationNoteRepository.save(note);
+
+        return consultationNoteRepository.findByAppointmentId(appointmentId)
+                .map(existing -> {
+                    existing.setChiefComplaint(note.getChiefComplaint());
+                    existing.setClinicalNotes(note.getClinicalNotes());
+                    existing.setDiagnosis(note.getDiagnosis());
+                    existing.setDoctorId(note.getDoctorId());
+                    existing.setPatientId(note.getPatientId());
+                    return consultationNoteRepository.save(existing);
+                })
+                .orElseGet(() -> {
+                    note.setAppointmentId(appointmentId);
+                    return consultationNoteRepository.save(note);
+                });
     }
 
     public ConsultationNote getNote(UUID appointmentId) {
@@ -310,13 +371,37 @@ public class AppointmentService {
                 .orElse(null);
     }
 
+    public List<ConsultationNote> getNotesByPatient(UUID patientId) {
+        return consultationNoteRepository.findByPatientId(patientId);
+    }
+
     public Prescription savePrescription(UUID appointmentId, Prescription prescription) {
         getAppointmentById(appointmentId);
-        prescription.setAppointmentId(appointmentId);
-        if (prescription.getItems() != null) {
-            prescription.getItems().forEach(item -> item.setPrescription(prescription));
-        }
-        return prescriptionRepository.save(prescription);
+
+        return prescriptionRepository.findByAppointmentId(appointmentId)
+                .map(existing -> {
+                    existing.setValidUntil(prescription.getValidUntil());
+                    existing.setNotes(prescription.getNotes());
+                    existing.setDoctorId(prescription.getDoctorId());
+                    existing.setPatientId(prescription.getPatientId());
+
+                    // Clear and update items
+                    existing.getItems().clear();
+                    if (prescription.getItems() != null) {
+                        prescription.getItems().forEach(item -> {
+                            item.setPrescription(existing);
+                            existing.getItems().add(item);
+                        });
+                    }
+                    return prescriptionRepository.save(existing);
+                })
+                .orElseGet(() -> {
+                    prescription.setAppointmentId(appointmentId);
+                    if (prescription.getItems() != null) {
+                        prescription.getItems().forEach(item -> item.setPrescription(prescription));
+                    }
+                    return prescriptionRepository.save(prescription);
+                });
     }
 
     public Prescription getPrescription(UUID appointmentId) {
@@ -329,9 +414,31 @@ public class AppointmentService {
     }
 
     public Review saveReview(UUID appointmentId, Review review) {
-        getAppointmentById(appointmentId);
+        Appointment appointment = getAppointmentById(appointmentId);
+        
+        if (appointment.getStatus() != AppointmentStatus.COMPLETED) {
+            throw new RuntimeException("Reviews can only be submitted for completed consultations.");
+        }
+
+        if (reviewRepository.findByAppointmentId(appointmentId).isPresent()) {
+            throw new RuntimeException("A review already exists for this appointment.");
+        }
+
         review.setAppointmentId(appointmentId);
-        return reviewRepository.save(review);
+        review.setPatientId(appointment.getPatientId());
+        review.setDoctorId(appointment.getDoctorId());
+        
+        Review savedReview = reviewRepository.save(review);
+
+        // Publish event for doctor-service to update doctor rating
+        ReviewSubmittedEvent event = ReviewSubmittedEvent.builder()
+                .appointmentId(appointmentId)
+                .doctorId(appointment.getDoctorId())
+                .rating(review.getRating())
+                .build();
+        kafkaTemplate.send("review-events", event);
+
+        return savedReview;
     }
 
     public List<Appointment> getAllAppointments() {

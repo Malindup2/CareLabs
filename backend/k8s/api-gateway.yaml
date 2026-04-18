@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: api-gateway
-        image: <your-dockerhub-username>/carelabs-api-gateway:latest
+        image: carelabs/carelabs-api-gateway:latest
         ports:
         - containerPort: 8080
         envFrom:

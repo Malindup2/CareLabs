@@ -43,12 +43,24 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getAppointmentsByPatient(patientId));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
     @GetMapping("/patient/{patientId}/prescriptions")
     public ResponseEntity<List<com.carelabs.appointments.entity.Prescription>> getPatientPrescriptions(@PathVariable UUID patientId,
                                                                                              Authentication authentication) {
-        ensurePatientOwnsRequestedPatientId(patientId, authentication);
+        if (!authentication.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_DOCTOR") || a.getAuthority().equals("ROLE_ADMIN"))) {
+            ensurePatientOwnsRequestedPatientId(patientId, authentication);
+        }
         return ResponseEntity.ok(appointmentService.getPrescriptionsByPatient(patientId));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('PATIENT') or hasRole('DOCTOR')")
+    @GetMapping("/patient/{patientId}/notes")
+    public ResponseEntity<List<com.carelabs.appointments.entity.ConsultationNote>> getPatientNotes(@PathVariable UUID patientId,
+                                                                                                 Authentication authentication) {
+        if (!authentication.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_DOCTOR") || a.getAuthority().equals("ROLE_ADMIN"))) {
+            ensurePatientOwnsRequestedPatientId(patientId, authentication);
+        }
+        return ResponseEntity.ok(appointmentService.getNotesByPatient(patientId));
     }
 
     //View doctor schedule

@@ -293,4 +293,18 @@ public class DoctorService {
         // 4. Finally, delete the doctor record
         doctorRepository.delete(doctor);
     }
+
+    public void updateDoctorRating(UUID doctorId, int newRating) {
+        Doctor doctor = getDoctorById(doctorId);
+        
+        int currentTotal = doctor.getTotalReviews() != null ? doctor.getTotalReviews() : 0;
+        double currentAverage = doctor.getAverageRating() != null ? doctor.getAverageRating() : 0.0;
+        
+        double newAverage = ((currentAverage * currentTotal) + newRating) / (currentTotal + 1);
+        
+        doctor.setTotalReviews(currentTotal + 1);
+        doctor.setAverageRating(newAverage);
+        
+        doctorRepository.save(doctor);
+    }
 }

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: payment-service
-        image: <your-dockerhub-username>/carelabs-payment-service:latest
+        image: carelabs/carelabs-payment-service:latest
         ports:
         - containerPort: 8085
         envFrom:
@@ -22,6 +22,9 @@ spec:
             name: shared-config
         - secretRef:
             name: shared-secret
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres-service:5432/carelabs_payments"
 ---
 apiVersion: v1
 kind: Service
