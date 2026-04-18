@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   # --- INFRASTRUCTURE ---
@@ -67,6 +67,8 @@ services:
       - kafka
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_auth
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       JWT_SECRET: your-512-bit-secret-key-goes-here
     networks:
@@ -81,6 +83,8 @@ services:
       - postgres
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_patients
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
     networks:
       - carelabs-network
 
@@ -94,6 +98,8 @@ services:
       - kafka
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_doctors
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     networks:
       - carelabs-network
@@ -108,6 +114,8 @@ services:
       - kafka
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_appointments
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       AUTH_SERVICE_URL: http://auth-service:8081
       PATIENT_SERVICE_URL: http://patient-service:8082
@@ -124,6 +132,8 @@ services:
       - kafka
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_notifications
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       AUTH_SERVICE_URL: http://auth-service:8081
       APPOINTMENTS_SERVICE_URL: http://appointments-service:8084
@@ -141,6 +151,8 @@ services:
       - kafka
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carelabs_payments
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: rootpassword
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       APPOINTMENTS_SERVICE_URL: http://appointments-service:8084
     networks:
