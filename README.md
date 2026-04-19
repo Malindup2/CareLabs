@@ -219,5 +219,9 @@ Full endpoint reference: [backend/README.md](./backend/README.md#-api-endpoints)
 This project is developed as part of the **SLIIT SE Year 3 Semester 2 Distributed Systems** module.
 
 ---
+<img width="1840" height="950" alt="Screenshot 2026-04-18 221345" src="https://github.com/user-attachments/assets/bdf5ab53-256e-4dec-af78-934662d31b85" />
+<img width="1895" height="863" alt="Screenshot 2026-04-19 123743" src="https://github.com/user-attachments/assets/218c4e2d-f5a1-4f5d-ba16-78d9708110af" />
+<img width="1890" height="864" alt="Screenshot 2026-04-19 123633" src="https://github.com/user-attachments/assets/258861da-5cd8-4587-be21-c52616b842bb" />
+
 
 *Built by the CareLabs team.*
