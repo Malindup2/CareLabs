@@ -55,6 +55,7 @@ interface Appointment {
   meetingUrl?: string;
   consultationFee?: number;
   type?: string;
+  doctorFullName?: string | null;
 }
 
 interface Payment {
